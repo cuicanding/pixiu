@@ -1,14 +1,14 @@
 """Global state management - connected to real services."""
 
 import reflex as rx
-from typing import List, Dict, Optional
+from typing import List, Dict
 from pathlib import Path
 
 from pixiu.services.database import Database
 from pixiu.services.data_service import DataService
 from pixiu.services.backtest_service import BacktestEngine, BacktestConfig
-from pixiu.services.ai_service import AIService
-from pixiu.strategies import get_all_strategies, get_strategy
+from pixiu.services.ai_service import AIReportService
+from pixiu.strategies import get_all_strategies
 from pixiu.config import config
 
 
@@ -38,7 +38,6 @@ class State(rx.State):
     
     ai_report: str = ""
     ai_generating: bool = False
-    
     glm_api_key: str = ""
     
     def __init__(self, *args, **kwargs):
@@ -47,14 +46,10 @@ class State(rx.State):
         self._load_settings()
     
     def _load_strategies(self):
-        """Load available strategies from registry."""
         try:
             strategies = get_all_strategies()
             self.available_strategies = [
-                {
-                    "name": s.name,
-                    "description": s.description,
-                }
+                {"name": s.name, "description": s.description}
                 for s in strategies
             ]
         except Exception:
@@ -65,7 +60,6 @@ class State(rx.State):
             ]
     
     def _load_settings(self):
-        """Load settings from config."""
         self.glm_api_key = getattr(config, 'glm_api_key', "") or ""
         self.initial_capital = getattr(config, 'initial_capital', 100000.0)
         self.commission_rate = getattr(config, 'commission_rate', 0.0003)
@@ -84,7 +78,6 @@ class State(rx.State):
         self.search_keyword = keyword
     
     async def search_stocks(self):
-        """Search stocks using real DataService."""
         if not self.search_keyword:
             return
         
@@ -105,10 +98,13 @@ class State(rx.State):
                 self.current_market
             )
             
-            self.search_results = [
-                {"code": s.code, "name": s.name, "market": s.market}
-                for s in results[:10]
-            ]
+            if results is None or len(results) == 0:
+                self.error_message = "未找到匹配的股票"
+            else:
+                self.search_results = [
+                    {"code": s.code, "name": s.name, "market": s.market}
+                    for s in results[:10]
+                ]
         except Exception as e:
             self.error_message = f"搜索失败: {str(e)}"
         finally:
@@ -116,26 +112,21 @@ class State(rx.State):
             yield
     
     async def select_stock(self, code: str):
-        """Select a stock and load its data."""
         self.selected_stock = code
         self.selected_stock_name = ""
-        
         for stock in self.search_results:
             if stock["code"] == code:
                 self.selected_stock_name = stock["name"]
                 break
-        
         yield
     
     def toggle_strategy(self, strategy_name: str):
-        """Toggle strategy selection."""
         if strategy_name in self.selected_strategies:
             self.selected_strategies = [s for s in self.selected_strategies if s != strategy_name]
         else:
             self.selected_strategies = self.selected_strategies + [strategy_name]
     
     async def run_backtest(self):
-        """Run backtest using real BacktestEngine."""
         if not self.selected_stock or not self.selected_strategies:
             self.error_message = "请先选择股票和策略"
             yield
@@ -176,6 +167,8 @@ class State(rx.State):
                 position_size=self.position_size,
             )
             
+            from pixiu.strategies import get_strategy
+            
             total = len(self.selected_strategies)
             for i, strategy_name in enumerate(self.selected_strategies):
                 self.loading_message = f"回测策略: {strategy_name}"
@@ -183,17 +176,20 @@ class State(rx.State):
                 yield
                 
                 strategy = get_strategy(strategy_name)
+                if strategy is None:
+                    continue
+                
                 engine = BacktestEngine(backtest_config)
-                result = engine.run(df, strategy)
+                signals = strategy.generate_signals(df)
+                result = engine.run(df, signals)
                 
                 trades = []
                 for t in result.trades[:50]:
                     trades.append({
-                        "date": t.date.strftime("%Y-%m-%d"),
-                        "type": t.trade_type,
-                        "price": float(t.price),
-                        "shares": float(t.shares),
-                        "pnl": float(t.pnl) if t.pnl else 0,
+                        "date": t.trade_date if hasattr(t, 'trade_date') else "",
+                        "type": t.signal_type if hasattr(t, 'signal_type') else "",
+                        "price": float(t.price) if t.price else 0,
+                        "shares": float(t.shares) if t.shares else 0,
                     })
                 
                 self.backtest_results = self.backtest_results + [{
@@ -208,19 +204,17 @@ class State(rx.State):
                 }]
             
             self.progress = 100
+            self.loading_message = "回测完成"
             yield
-            
-            return rx.redirect("/backtest")
             
         except Exception as e:
             self.error_message = f"回测失败: {str(e)}"
         finally:
             self.is_loading = False
             self.loading_message = ""
-            yield
+        yield
     
     async def generate_ai_report(self):
-        """Generate AI analysis report."""
         if not self.glm_api_key:
             self.error_message = "请先在设置中配置 GLM API Key"
             yield
@@ -236,18 +230,22 @@ class State(rx.State):
         yield
         
         try:
-            ai_service = AIService(self.glm_api_key)
-            self.ai_report = await ai_service.generate_analysis_report(
-                self.selected_stock,
-                self.selected_stock_name,
-                self.backtest_results,
-            )
+            ai_service = AIReportService(self.glm_api_key)
+            
+            if len(self.backtest_results) > 0:
+                result = self.backtest_results[0]
+                stock_info = {"code": self.selected_stock, "name": self.selected_stock_name}
+                self.ai_report = await ai_service.generate_analysis(
+                    result,
+                    stock_info,
+                    result.get("strategy", "")
+                )
         except Exception as e:
             self.error_message = f"AI 报告生成失败: {str(e)}"
             self.ai_report = ""
         finally:
             self.ai_generating = False
-            yield
+        yield
     
     def set_glm_api_key(self, key: str):
         self.glm_api_key = key
@@ -271,7 +269,6 @@ class State(rx.State):
             pass
     
     def save_settings(self):
-        """Save settings to config and environment."""
         import os
         os.environ["GLM_API_KEY"] = self.glm_api_key
         if hasattr(config, 'glm_api_key'):
@@ -284,5 +281,4 @@ class State(rx.State):
             config.position_size = self.position_size
     
     def clear_error(self):
-        """Clear error message."""
         self.error_message = ""

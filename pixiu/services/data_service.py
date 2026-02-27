@@ -38,31 +38,39 @@ class DataService:
             logger.warning("akshare not installed, returning empty list")
             return []
         
-        try:
-            if market == "A股":
-                df = await asyncio.to_thread(ak.stock_zh_a_spot_em)
-                filtered = df[df['名称'].str.contains(keyword, na=False)]
-                return [
-                    Stock(code=row['代码'], name=row['名称'], market="A股")
-                    for _, row in filtered.head(20).iterrows()
-                ]
-            elif market == "港股":
-                df = await asyncio.to_thread(ak.stock_hk_spot_em)
-                filtered = df[df['名称'].str.contains(keyword, na=False)]
-                return [
-                    Stock(code=row['代码'], name=row['名称'], market="港股")
-                    for _, row in filtered.head(20).iterrows()
-                ]
-            elif market == "美股":
-                df = await asyncio.to_thread(ak.stock_us_spot_em)
-                filtered = df[df['名称'].str.contains(keyword, na=False)]
-                return [
-                    Stock(code=row['代码'], name=row['名称'], market="美股")
-                    for _, row in filtered.head(20).iterrows()
-                ]
-        except Exception as e:
-            logger.error(f"搜索股票失败: {e}")
-            return []
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                if market == "A股":
+                    df = await asyncio.to_thread(ak.stock_zh_a_spot_em)
+                    filtered = df[df['名称'].str.contains(keyword, na=False)]
+                    return [
+                        Stock(code=row['代码'], name=row['名称'], market="A股")
+                        for _, row in filtered.head(20).iterrows()
+                    ]
+                elif market == "港股":
+                    df = await asyncio.to_thread(ak.stock_hk_spot_em)
+                    filtered = df[df['名称'].str.contains(keyword, na=False)]
+                    return [
+                        Stock(code=row['代码'], name=row['名称'], market="港股")
+                        for _, row in filtered.head(20).iterrows()
+                    ]
+                elif market == "美股":
+                    df = await asyncio.to_thread(ak.stock_us_spot_em)
+                    filtered = df[df['名称'].str.contains(keyword, na=False)]
+                    return [
+                        Stock(code=row['代码'], name=row['名称'], market="美股")
+                        for _, row in filtered.head(20).iterrows()
+                    ]
+            except Exception as e:
+                logger.warning(f"搜索股票失败 (尝试 {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"搜索股票失败，已达到最大重试次数: {e}")
+                    raise e
         return []
     
     async def fetch_stock_history(
