@@ -1,121 +1,71 @@
-"""Settings page - clean form layout."""
+"""设置页面"""
 
 import reflex as rx
 from pixiu.state import State
 
 
 def page() -> rx.Component:
-    """Settings page with dark theme."""
+    """设置页面"""
     return rx.box(
         rx.vstack(
-            # Header
             rx.hstack(
-                rx.button(
-                    "← 返回",
-                    on_click=rx.redirect("/"),
-                    variant="ghost",
-                    color_scheme="cyan",
-                ),
+                rx.heading("系统设置", size="6"),
                 rx.spacer(),
-                rx.text(
-                    "系统设置",
-                    font_size="1.5rem",
-                    font_weight="bold",
-                    color="#ffffff",
-                ),
-                rx.spacer(),
+                rx.link("返回首页", href="/", color_scheme="cyan"),
                 width="100%",
             ),
             
-            rx.divider(border_color="#2a2a3a"),
+            rx.divider(),
             
-            # API Configuration
             rx.box(
-                rx.text("GLM API Key", color="#a0a0b0", font_size="0.875rem"),
+                rx.heading("API 配置", size="5"),
+                rx.text("GLM API Key", color="gray.400"),
                 rx.input(
                     placeholder="输入 GLM API Key",
                     value=State.glm_api_key,
                     on_change=State.set_glm_api_key,
                     type="password",
-                    bg="#1a1a24",
-                    border="1px solid #2a2a3a",
                     width="100%",
-                    margin_top="0.5rem",
                 ),
-                rx.text(
-                    "用于生成 AI 智能分析报告。可在 zhipuai.cn 获取",
-                    font_size="0.75rem",
-                    color="#6b7280",
-                    margin_top="0.5rem",
-                ),
-                bg="#12121a",
-                padding="1.5rem",
-                border_radius="0.5rem",
-                border="1px solid #2a2a3a",
-                width="100%",
+                rx.text("用于生成 AI 智能分析报告", color="gray.500", font_size="0.75rem"),
+                margin_top="1rem",
             ),
             
-            # Backtest Parameters
             rx.box(
-                rx.text("回测参数", color="#a0a0b0", font_size="0.875rem"),
+                rx.heading("回测参数", size="5"),
                 rx.grid(
                     rx.box(
-                        rx.text("初始资金", color="#a0a0b0", font_size="0.75rem"),
+                        rx.text("初始资金", color="gray.400"),
                         rx.input(
-                            value=str(State.initial_capital),
+                            value=State.initial_capital,
                             on_change=State.set_initial_capital,
-                            placeholder="100000",
-                            bg="#1a1a24",
-                            border="1px solid #2a2a3a",
                             width="100%",
-                            margin_top="0.5rem",
                         ),
                     ),
                     rx.box(
-                        rx.text("手续费率", color="#a0a0b0", font_size="0.75rem"),
+                        rx.text("手续费率", color="gray.400"),
                         rx.input(
-                            value=str(State.commission_rate),
+                            value=State.commission_rate,
                             on_change=State.set_commission_rate,
-                            placeholder="0.0003",
-                            bg="#1a1a24",
-                            border="1px solid #2a2a3a",
                             width="100%",
-                            margin_top="0.5rem",
                         ),
                     ),
                     rx.box(
-                        rx.text("仓位比例", color="#a0a0b0", font_size="0.75rem"),
+                        rx.text("仓位比例", color="gray.400"),
                         rx.input(
-                            value=str(State.position_size),
+                            value=State.position_size,
                             on_change=State.set_position_size,
-                            placeholder="0.95",
-                            bg="#1a1a24",
-                            border="1px solid #2a2a3a",
                             width="100%",
-                            margin_top="0.5rem",
                         ),
                     ),
                     columns="3",
                     spacing="4",
                     margin_top="1rem",
                 ),
-                bg="#12121a",
-                padding="1.5rem",
-                border_radius="0.5rem",
-                border="1px solid #2a2a3a",
-                width="100%",
+                margin_top="1.5rem",
             ),
             
-            # Save Button
-            rx.button(
-                "保存设置",
-                on_click=State.save_settings,
-                color_scheme="cyan",
-                size="3",
-                margin_top="1rem",
-            ),
-            
-            rx.spacer(),
+            rx.button("保存设置", on_click=State.save_settings, color_scheme="cyan", size="3"),
             
             spacing="4",
             width="100%",
@@ -124,5 +74,5 @@ def page() -> rx.Component:
             padding="2rem",
         ),
         min_height="100vh",
-        bg="#0a0a0f",
+        bg="gray.950",
     )

@@ -11,21 +11,34 @@ def page() -> rx.Component:
             rx.hstack(
                 rx.heading("Pixiu 量化分析", size="6"),
                 rx.spacer(),
-                rx.badge("v0.1.0", color_scheme="blue"),
+                rx.badge("v0.2.0", color_scheme="cyan"),
                 width="100%",
-                margin_bottom="1rem",
             ),
             
+            # 使用说明
+            rx.box(
+                rx.text("使用说明", font_weight="bold"),
+                rx.text("1. 选择市场：点击下方按钮切换 A股/港股/美股", font_size="0.875rem", color="gray.400"),
+                rx.text("2. 搜索股票：输入股票代码或名称，如 000001 或 腾讯", font_size="0.875rem", color="gray.400"),
+                rx.text("3. 选择股票：点击搜索结果中的股票", font_size="0.875rem", color="gray.400"),
+                rx.text("4. 选择策略：点击策略卡片选中", font_size="0.875rem", color="gray.400"),
+                rx.text("5. 开始分析：点击开始按钮执行回测", font_size="0.875rem", color="gray.400"),
+                bg="gray.900",
+                padding="1rem",
+                border_radius="0.5rem",
+                width="100%",
+            ),
+            
+            # 市场选择
             rx.hstack(
                 rx.text("市场:", font_weight="bold"),
                 rx.button("A股", on_click=State.set_market_a),
                 rx.button("港股", on_click=State.set_market_hk),
                 rx.button("美股", on_click=State.set_market_us),
                 spacing="2",
-                width="100%",
-                margin_bottom="1rem",
             ),
             
+            # 搜索
             rx.hstack(
                 rx.input(
                     placeholder="输入股票代码或名称搜索...",
@@ -33,16 +46,23 @@ def page() -> rx.Component:
                     on_change=State.set_search_keyword,
                     width="70%",
                 ),
-                rx.button("搜索", on_click=State.search_stocks, color_scheme="blue"),
+                rx.button("搜索", on_click=State.search_stocks, color_scheme="cyan"),
                 width="100%",
-                margin_bottom="0.5rem",
             ),
             
+            # 加载状态
             rx.cond(
                 State.is_loading,
                 rx.hstack(rx.spinner(), rx.text(State.loading_message)),
             ),
             
+            # 错误信息
+            rx.cond(
+                State.error_message != "",
+                rx.text(State.error_message, color="red"),
+            ),
+            
+            # 搜索结果
             rx.box(
                 rx.foreach(
                     State.search_results,
@@ -53,14 +73,14 @@ def page() -> rx.Component:
                 width="100%",
             ),
             
+            # 已选股票和策略
             rx.cond(
                 State.selected_stock != "",
                 rx.box(
-                    rx.heading(State.selected_stock_name, size="5"),
-                    rx.divider(margin_y="1rem"),
+                    rx.heading(f"已选: {State.selected_stock} {State.selected_stock_name}", size="5"),
+                    rx.divider(),
                     
-                    rx.text("策略选择", font_weight="bold", margin_bottom="0.5rem"),
-                    
+                    rx.text("策略选择", font_weight="bold"),
                     rx.grid(
                         rx.foreach(
                             State.available_strategies,
@@ -68,17 +88,15 @@ def page() -> rx.Component:
                         ),
                         columns="2",
                         spacing="3",
-                        margin_bottom="1rem",
                     ),
                     
                     rx.hstack(
-                        rx.button("开始分析", on_click=State.run_backtest, color_scheme="blue", size="3"),
+                        rx.button("开始分析", on_click=State.run_backtest, color_scheme="cyan", size="3"),
                         rx.progress(value=State.progress, width="200px"),
                     ),
                     padding="1.5rem",
-                    border="1px solid gray.200",
+                    border="1px solid gray.700",
                     border_radius="lg",
-                    margin_top="1rem",
                 ),
             ),
             
@@ -87,16 +105,19 @@ def page() -> rx.Component:
             rx.hstack(
                 rx.text("Pixiu 2024", color="gray.400"),
                 rx.spacer(),
-                rx.link("设置", href="/settings", color_scheme="blue"),
+                rx.link("设置", href="/settings", color_scheme="cyan"),
                 width="100%",
             ),
+            
+            spacing="4",
+            width="100%",
         ),
         width="100%",
-        max_width="1000px",
+        max_width="800px",
         margin="0 auto",
         padding="2rem",
         min_height="100vh",
-        bg="gray.50",
+        bg="gray.950",
     )
 
 
@@ -104,13 +125,12 @@ def render_search_result(stock: dict) -> rx.Component:
     """渲染搜索结果项"""
     return rx.box(
         rx.hstack(
-            rx.text(stock["code"], font_weight="bold", width="100px"),
+            rx.text(stock["code"], font_weight="bold", min_width="80px"),
             rx.text(stock["name"]),
         ),
         padding="0.5rem",
         cursor="pointer",
         on_click=lambda: State.select_stock(stock["code"]),
-        border_bottom="1px solid gray.200",
     )
 
 
@@ -118,9 +138,9 @@ def render_strategy(s: dict) -> rx.Component:
     """渲染策略项"""
     return rx.box(
         rx.text(s["name"], font_weight="bold"),
-        rx.text(s["description"], font_size="sm", color="gray.500"),
+        rx.text(s.get("description", ""), font_size="sm", color="gray.500"),
         padding="0.75rem",
-        border="1px solid gray.200",
+        border="1px solid gray.700",
         border_radius="md",
         cursor="pointer",
         on_click=lambda: State.toggle_strategy(s["name"]),

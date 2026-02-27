@@ -282,3 +282,8 @@ class State(rx.State):
     
     def clear_error(self):
         self.error_message = ""
+
+    @rx.var
+    def backtest_results_empty(self) -> bool:
+        """Check if backtest results are empty."""
+        return len(self.backtest_results) == 0
