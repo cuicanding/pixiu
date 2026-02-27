@@ -1,7 +1,6 @@
 """设置页面"""
 
 import reflex as rx
-from pixiu.config import config
 
 
 class SettingsState(rx.State):
@@ -9,20 +8,18 @@ class SettingsState(rx.State):
     glm_api_key: str = ""
     initial_capital: str = "100000"
     commission_rate: str = "0.0003"
-    
-    def load_settings(self):
-        """加载设置"""
-        self.glm_api_key = config.glm_api_key
-        self.initial_capital = str(config.initial_capital)
-        self.commission_rate = str(config.commission_rate)
-    
+
+    def set_glm_api_key(self, value: str):
+        self.glm_api_key = value
+
+    def set_initial_capital(self, value: str):
+        self.initial_capital = value
+
+    def set_commission_rate(self, value: str):
+        self.commission_rate = value
+
     def save_settings(self):
-        """保存设置"""
-        import os
-        os.environ["GLM_API_KEY"] = self.glm_api_key
-        config.glm_api_key = self.glm_api_key
-        config.initial_capital = float(self.initial_capital)
-        config.commission_rate = float(self.commission_rate)
+        pass
 
 
 def page() -> rx.Component:
@@ -30,7 +27,7 @@ def page() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.heading("⚙️ 设置", size="lg"),
+                rx.heading("设置", size="6"),
                 rx.spacer(),
                 rx.button("返回", on_click=rx.redirect("/")),
                 width="100%",
@@ -38,7 +35,7 @@ def page() -> rx.Component:
             ),
             
             rx.box(
-                rx.heading("GLM API 配置", size="md", margin_bottom="1rem"),
+                rx.heading("GLM API 配置", size="5", margin_bottom="1rem"),
                 rx.input(
                     placeholder="输入 GLM API Key",
                     value=SettingsState.glm_api_key,
@@ -55,7 +52,7 @@ def page() -> rx.Component:
             ),
             
             rx.box(
-                rx.heading("回测参数", size="md", margin_bottom="1rem"),
+                rx.heading("回测参数", size="5", margin_bottom="1rem"),
                 
                 rx.vstack(
                     rx.hstack(
@@ -74,7 +71,7 @@ def page() -> rx.Component:
                             width="200px",
                         ),
                     ),
-                    spacing="1rem",
+                    spacing="3",
                 ),
                 
                 padding="1.5rem",
@@ -100,5 +97,4 @@ def page() -> rx.Component:
         ),
         min_height="100vh",
         bg="gray.50",
-        on_mount=SettingsState.load_settings,
     )
