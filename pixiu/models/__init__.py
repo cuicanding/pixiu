@@ -2,6 +2,5 @@
 
 from .stock import Stock, DailyQuote
 from .backtest import BacktestResult, Trade
-from .signal import Signal
 
-__all__ = ["Stock", "DailyQuote", "BacktestResult", "Trade", "Signal"]
+__all__ = ["Stock", "DailyQuote", "BacktestResult", "Trade"]

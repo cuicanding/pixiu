@@ -1,6 +1,7 @@
 """回测结果模型"""
 
-from dataclasses import dataclass,from typing import List
+from dataclasses import dataclass, field
+from typing import List
 
 
 @dataclass
@@ -27,14 +28,6 @@ class BacktestResult:
     total_trades: int
     start_date: str = ""
     end_date: str = ""
-    trades: List[Trade] = None
-    equity_curve: List[float] = None
-    drawdown_curve: List[float] = None
-    
-    def __post_init__(self):
-        if self.trades is None:
-            self.trades = []
-        if self.equity_curve is None:
-            self.equity_curve = []
-        if self.drawdown_curve is None:
-            self.drawdown_curve = []
+    trades: List[Trade] = field(default_factory=list)
+    equity_curve: List[float] = field(default_factory=list)
+    drawdown_curve: List[float] = field(default_factory=list)
