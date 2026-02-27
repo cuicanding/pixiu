@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-from scipy import integrate
 from typing import List
 
 from .base import BaseStrategy
@@ -47,7 +46,7 @@ class VolatilityStrategy(BaseStrategy):
             y = volatility_values[:i]
             mask = ~np.isnan(y)
             if mask.sum() > 1:
-                df.loc[df.index[i], 'volatility_integral'] = integrate.trapezoid(y[mask], x[mask])
+                df.loc[df.index[i], 'volatility_integral'] = np.trapz(y[mask], x[mask])
         
         vol_integral_normalized = df['volatility_integral'] / df['volatility_integral'].rolling(window*2).mean()
         
