@@ -5,11 +5,13 @@
 **Pixiu (貔貅)** 是一款基于Python的A股/港股/美股量化分析桌面软件，提供策略实验、回测分析和AI智能解读功能。
 
 ### 目标用户
+
 - 有Python基础但对量化分析不太熟悉的投资者
 - 希望通过实验学习量化策略的用户
 - 需要验证策略效果后用于实际交易的用户
 
 ### 核心价值
+
 - **学习**: 通过可视化实验理解量化策略原理
 - **验证**: 回测功能验证策略历史表现
 - **决策**: AI解读辅助投资决策
@@ -18,15 +20,15 @@
 
 ## 技术栈
 
-| 组件 | 技术选型 | 说明 |
-|------|----------|------|
-| 框架 | Reflex | 纯Python全栈框架，支持桌面打包 |
-| 数据源 | akshare | 支持A股/港股/美股数据获取 |
-| 存储 | SQLite | 轻量级本地数据库 |
-| 数据处理 | Pandas + NumPy | 数据清洗和计算 |
-| 科学计算 | SciPy | 微积分、滤波等数学运算 |
-| 可视化 | Plotly | 交互式图表 |
-| AI | GLM-5 API | 智能分析报告生成 |
+| 组件   | 技术选型           | 说明                 |
+| ---- | -------------- | ------------------ |
+| 框架   | Reflex         | 纯Python全栈框架，支持桌面打包 |
+| 数据源  | akshare        | 支持A股/港股/美股数据获取     |
+| 存储   | SQLite         | 轻量级本地数据库           |
+| 数据处理 | Pandas + NumPy | 数据清洗和计算            |
+| 科学计算 | SciPy          | 微积分、滤波等数学运算        |
+| 可视化  | Plotly         | 交互式图表              |
+| AI   | GLM-5 API      | 智能分析报告生成           |
 
 ---
 
@@ -220,33 +222,33 @@ import pandas as pd
 
 class BaseStrategy(ABC):
     """所有策略必须继承此类"""
-    
+
     name: str = ""
     description: str = ""
     params: dict = {}
-    
+
     @abstractmethod
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         """输入行情数据，输出带信号的DataFrame
-        
+
         Args:
             df: 包含 open, high, low, close, volume 等列的DataFrame
-            
+
         Returns:
             添加 signal 列的DataFrame
             signal: 1=买入, -1=卖出, 0=持有
         """
         pass
-    
+
     @abstractmethod
     def get_required_data(self) -> list[str]:
         """返回需要的数据列"""
         pass
-    
+
     def validate_params(self) -> bool:
         """参数校验"""
         return True
-    
+
     def get_documentation(self) -> str:
         """返回策略的数学原理说明（Markdown格式）"""
         return ""
@@ -275,12 +277,12 @@ def get_strategy(name: str) -> BaseStrategy | None:
 
 ### 初始策略列表
 
-| 策略名称 | 数学原理 | 说明 |
-|----------|----------|------|
-| 趋势强度策略 | 导数应用 | f'(t)>0上升，f''(t)判断加速度 |
-| 波动率套利策略 | 积分/导数 | 波动率积分判断超买超卖 |
-| 卡尔曼滤波策略 | 微分方程 | 状态估计与噪声过滤 |
-| 随机游走策略 | 布朗运动 | 均值回归交易 |
+| 策略名称    | 数学原理  | 说明                    |
+| ------- | ----- | --------------------- |
+| 趋势强度策略  | 导数应用  | f'(t)>0上升，f''(t)判断加速度 |
+| 波动率套利策略 | 积分/导数 | 波动率积分判断超买超卖           |
+| 卡尔曼滤波策略 | 微分方程  | 状态估计与噪声过滤             |
+| 随机游走策略  | 布朗运动  | 均值回归交易                |
 
 ---
 
@@ -300,16 +302,16 @@ class BacktestConfig:
 
 ### 回测输出指标
 
-| 指标 | 公式 | 说明 |
-|------|------|------|
-| 总收益率 | (期末-期初)/期初 | 整体盈亏 |
-| 年化收益率 | 总收益率^(365/天数)-1 | 标准化比较 |
-| 最大回撤 | max((峰值-谷值)/峰值) | 风险度量 |
-| 夏普比率 | (收益-无风险利率)/波动率 | 风险调整收益 |
-| 胜率 | 盈利次数/总次数 | 成功率 |
-| 盈亏比 | 平均盈利/平均亏损 | 收益质量 |
-| 卡玛比率 | 年化收益/最大回撤 | 回撤效率 |
-| 总交易次数 | - | 换手频率 |
+| 指标    | 公式              | 说明     |
+| ----- | --------------- | ------ |
+| 总收益率  | (期末-期初)/期初      | 整体盈亏   |
+| 年化收益率 | 总收益率^(365/天数)-1 | 标准化比较  |
+| 最大回撤  | max((峰值-谷值)/峰值) | 风险度量   |
+| 夏普比率  | (收益-无风险利率)/波动率  | 风险调整收益 |
+| 胜率    | 盈利次数/总次数        | 成功率    |
+| 盈亏比   | 平均盈利/平均亏损       | 收益质量   |
+| 卡玛比率  | 年化收益/最大回撤       | 回撤效率   |
+| 总交易次数 | -               | 换手频率   |
 
 ---
 
@@ -318,17 +320,20 @@ class BacktestConfig:
 ### 页面结构
 
 1. **首页 (Home)**
+   
    - 市场选择（A股/港股/美股）
    - 股票搜索与选择
    - K线图展示
    - 策略选择面板
 
 2. **分析页 (Analysis)**
+   
    - 单策略详细分析
    - 参数调节面板
    - 信号可视化
 
 3. **回测页 (Backtest)**
+   
    - 核心指标卡片
    - 收益曲线对比
    - 回撤分析图
@@ -336,6 +341,7 @@ class BacktestConfig:
    - AI智能报告
 
 4. **设置页 (Settings)**
+   
    - GLM API Key 配置
    - 数据更新设置
    - 策略参数默认值
@@ -349,16 +355,16 @@ class AppState(rx.State):
     is_loading: bool = False
     loading_message: str = ""
     progress: float = 0.0
-    
+
     @rx.background
     async def run_analysis(self):
         async with self:
             self.is_loading = True
             self.loading_message = "正在分析..."
-        
+
         # 耗时操作
         result = await self._execute_strategies()
-        
+
         async with self:
             self.backtest_result = result
             self.is_loading = False
@@ -376,7 +382,7 @@ from zhipuai import ZhipuAI
 class AIReportService:
     def __init__(self, api_key: str):
         self.client = ZhipuAI(api_key=api_key)
-    
+
     async def generate_analysis(
         self, 
         backtest_result: dict,
@@ -384,7 +390,7 @@ class AIReportService:
         strategy_desc: str
     ) -> str:
         """生成自然语言分析报告"""
-        
+
         response = await self.client.chat.completions.acreate(
             model="glm-5",
             messages=[
@@ -393,7 +399,7 @@ class AIReportService:
             ],
             temperature=0.7,
         )
-        
+
         return response.choices[0].message.content
 ```
 
@@ -406,28 +412,33 @@ class AIReportService:
 ## 实现计划
 
 ### Phase 1: 框架搭建
+
 - Reflex项目初始化
 - SQLite数据库设计
 - 数据获取服务（akshare集成）
 - 基础UI框架
 
 ### Phase 2: 核心功能
+
 - 趋势强度策略实现
 - 回测引擎开发
 - 回测结果可视化
 
 ### Phase 3: 策略扩展
+
 - 波动率套利策略
 - 卡尔曼滤波策略
 - 随机游走策略
 - 多策略对比功能
 
 ### Phase 4: AI集成
+
 - GLM-5 API集成
 - 自然语言报告生成
 - 报告缓存优化
 
 ### Phase 5: 打磨发布
+
 - 界面美化
 - 错误处理完善
 - 打包测试

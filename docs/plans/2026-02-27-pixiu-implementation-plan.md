@@ -15,6 +15,7 @@
 ### Task 1.1: 创建Reflex项目结构
 
 **Files:**
+
 - Create: `pixiu/__init__.py`
 - Create: `pixiu/pixiu.py`
 - Create: `pixiu/config.py`
@@ -71,15 +72,15 @@ from pathlib import Path
 class Config:
     APP_NAME: str = "Pixiu"
     APP_VERSION: str = "0.1.0"
-    
+
     DATA_DIR: Path = Path(__file__).parent.parent / "data"
     DB_PATH: Path = DATA_DIR / "stocks.db"
     CACHE_DIR: Path = DATA_DIR / "cache"
-    
+
     GLM_MODEL: str = "glm-5"
-    
+
     MARKETS: list[str] = ["A股", "港股", "美股"]
-    
+
     DEFAULT_BACKTEST_CAPITAL: float = 100000.0
     DEFAULT_COMMISSION_RATE: float = 0.0003
     DEFAULT_SLIPPAGE_RATE: float = 0.0001
@@ -119,6 +120,7 @@ git commit -m "feat: initialize Reflex project structure"
 ### Task 1.2: 设置SQLite数据库模型
 
 **Files:**
+
 - Create: `pixiu/models/__init__.py`
 - Create: `pixiu/models/stock.py`
 - Create: `pixiu/models/database.py`
@@ -159,19 +161,19 @@ from .database import Base
 
 class Stock(Base):
     __tablename__ = "stocks"
-    
+
     code = Column(String(20), primary_key=True)
     name = Column(String(50))
     market = Column(String(10))
     industry = Column(String(50))
     list_date = Column(Date, nullable=True)
     updated_at = Column(DateTime, default=datetime.now)
-    
+
     quotes = relationship("DailyQuote", back_populates="stock", cascade="all, delete-orphan")
 
 class DailyQuote(Base):
     __tablename__ = "daily_quotes"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     code = Column(String(20), ForeignKey("stocks.code"))
     trade_date = Column(Date)
@@ -182,16 +184,16 @@ class DailyQuote(Base):
     volume = Column(Float)
     amount = Column(Float)
     turnover_rate = Column(Float, nullable=True)
-    
+
     stock = relationship("Stock", back_populates="quotes")
-    
+
     __table_args__ = (
         {"unique_constraint": ("code", "trade_date")},
     )
 
 class StrategySignal(Base):
     __tablename__ = "strategy_signals"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     code = Column(String(20))
     strategy_name = Column(String(50))
@@ -203,7 +205,7 @@ class StrategySignal(Base):
 
 class UpdateLog(Base):
     __tablename__ = "update_logs"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     market = Column(String(10))
     last_update = Column(DateTime)
@@ -238,6 +240,7 @@ git commit -m "feat: add SQLite database models"
 ### Task 1.3: 实现数据获取服务
 
 **Files:**
+
 - Create: `pixiu/services/__init__.py`
 - Create: `pixiu/services/data_service.py`
 
@@ -265,7 +268,7 @@ class DataService:
         "港股": ".HK",
         "美股": ".US"
     }
-    
+
     @staticmethod
     def search_stocks(keyword: str, market: str = "A股") -> list[dict]:
         """搜索股票"""
@@ -286,7 +289,7 @@ class DataService:
             print(f"Search error: {e}")
             return []
         return []
-    
+
     @staticmethod
     async def fetch_stock_history(code: str, market: str, start_date: str = None) -> pd.DataFrame:
         """获取股票历史数据"""
@@ -317,14 +320,14 @@ class DataService:
                     '日期': 'trade_date', '开盘': 'open', '收盘': 'close',
                     '最高': 'high', '最低': 'low', '成交量': 'volume'
                 })
-            
+
             df['trade_date'] = pd.to_datetime(df['trade_date'])
             df = df.sort_values('trade_date')
             return df
         except Exception as e:
             print(f"Fetch history error: {e}")
             return pd.DataFrame()
-    
+
     @staticmethod
     def save_to_database(code: str, name: str, market: str, df: pd.DataFrame) -> int:
         """保存数据到数据库"""
@@ -334,13 +337,13 @@ class DataService:
             if not stock:
                 stock = Stock(code=code, name=name, market=market)
                 session.add(stock)
-            
+
             records_added = 0
             for _, row in df.iterrows():
                 existing = session.query(DailyQuote).filter_by(
                     code=code, trade_date=row['trade_date'].date()
                 ).first()
-                
+
                 if not existing:
                     quote = DailyQuote(
                         code=code,
@@ -355,7 +358,7 @@ class DataService:
                     )
                     session.add(quote)
                     records_added += 1
-            
+
             session.commit()
             return records_added
         except Exception as e:
@@ -364,7 +367,7 @@ class DataService:
             return 0
         finally:
             session.close()
-    
+
     @staticmethod
     def load_from_database(code: str) -> pd.DataFrame:
         """从数据库加载股票数据"""
@@ -373,7 +376,7 @@ class DataService:
             quotes = session.query(DailyQuote).filter_by(code=code).order_by(DailyQuote.trade_date).all()
             if not quotes:
                 return pd.DataFrame()
-            
+
             data = [{
                 'trade_date': q.trade_date,
                 'open': q.open,
@@ -384,11 +387,11 @@ class DataService:
                 'amount': q.amount,
                 'turnover_rate': q.turnover_rate
             } for q in quotes]
-            
+
             return pd.DataFrame(data)
         finally:
             session.close()
-    
+
     @staticmethod
     def get_last_update_date(code: str) -> Optional[datetime]:
         """获取最后更新日期"""
@@ -431,6 +434,7 @@ git commit -m "feat: add data service with akshare integration"
 ### Task 1.4: 创建基础UI框架和状态管理
 
 **Files:**
+
 - Create: `pixiu/state.py`
 - Create: `pixiu/pages/__init__.py`
 - Create: `pixiu/pages/home.py`
@@ -452,35 +456,35 @@ class State(rx.State):
     is_loading: bool = False
     loading_message: str = ""
     progress: float = 0.0
-    
+
     current_market: str = "A股"
     search_keyword: str = ""
     search_results: list[dict] = []
-    
+
     current_stock_code: str = ""
     current_stock_name: str = ""
     stock_data: pd.DataFrame = pd.DataFrame()
-    
+
     selected_strategies: list[str] = []
     backtest_result: dict = {}
-    
+
     glm_api_key: str = ""
     ai_report: str = ""
     ai_generating: bool = False
-    
+
     def set_market(self, market: str):
         self.current_market = market
         self.search_results = []
-    
+
     def set_search_keyword(self, keyword: str):
         self.search_keyword = keyword
-    
+
     def search_stocks(self):
         if not self.search_keyword:
             self.search_results = []
             return
         self.search_results = DataService.search_stocks(self.search_keyword, self.current_market)
-    
+
     @rx.background
     async def select_stock(self, code: str, name: str):
         async with self:
@@ -488,21 +492,21 @@ class State(rx.State):
             self.loading_message = "正在加载股票数据..."
             self.current_stock_code = code
             self.current_stock_name = name
-        
+
         df = DataService.load_from_database(code)
-        
+
         if df.empty:
             async with self:
                 self.loading_message = "正在从网络获取数据..."
             df = await DataService.fetch_stock_history(code, self.current_market)
             if not df.empty:
                 DataService.save_to_database(code, name, self.current_market, df)
-        
+
         async with self:
             self.stock_data = df
             self.is_loading = False
             self.loading_message = ""
-    
+
     def toggle_strategy(self, strategy_name: str):
         if strategy_name in self.selected_strategies:
             self.selected_strategies.remove(strategy_name)
@@ -541,7 +545,7 @@ def stock_card(stock: dict) -> rx.Component:
 def home_page() -> rx.Component:
     return rx.vstack(
         rx.heading(f"📊 {config.APP_NAME} 量化分析实验室", size="lg"),
-        
+
         rx.hstack(
             rx.select(
                 config.MARKETS,
@@ -556,19 +560,19 @@ def home_page() -> rx.Component:
             ),
             rx.button("搜索", on_click=State.search_stocks),
         ),
-        
+
         rx.text(f"当前股票: {State.current_stock_name} ({State.current_stock_code})")
             if State.current_stock_code else rx.text("请选择一只股票"),
-        
+
         rx.box(
             rx.foreach(State.search_results, stock_card),
             max_height="400px",
             overflow_y="auto",
         ),
-        
+
         rx.spinner() if State.is_loading else rx.fragment(),
         rx.text(State.loading_message) if State.is_loading else rx.fragment(),
-        
+
         spacing="4",
         padding="4",
     )
@@ -583,9 +587,9 @@ from pixiu.state import State
 def analysis_page() -> rx.Component:
     return rx.vstack(
         rx.heading("📈 策略分析", size="lg"),
-        
+
         rx.text(f"分析股票: {State.current_stock_name}"),
-        
+
         rx.hstack(
             rx.badge("趋势强度", 
                 color_scheme="green" if "趋势强度" in State.selected_strategies else "gray",
@@ -603,9 +607,9 @@ def analysis_page() -> rx.Component:
                 cursor="pointer",
             ),
         ),
-        
+
         rx.button("开始分析", on_click=rx.redirect("/backtest")),
-        
+
         spacing="4",
         padding="4",
     )
@@ -620,7 +624,7 @@ from pixiu.state import State
 def backtest_page() -> rx.Component:
     return rx.vstack(
         rx.heading("📋 回测结果", size="lg"),
-        
+
         rx.hstack(
             rx.stat_group(
                 rx.stat(
@@ -633,14 +637,14 @@ def backtest_page() -> rx.Component:
                 ),
             ),
         ),
-        
+
         rx.box(
             rx.text("收益曲线图表区域"),
             min_height="300px",
             bg="gray.100",
             border_radius="md",
         ),
-        
+
         rx.box(
             rx.heading("🤖 AI 分析报告", size="md"),
             rx.markdown(State.ai_report) if State.ai_report else rx.text("点击下方按钮生成AI报告"),
@@ -649,7 +653,7 @@ def backtest_page() -> rx.Component:
             bg="gray.50",
             border_radius="md",
         ),
-        
+
         spacing="4",
         padding="4",
     )
@@ -664,7 +668,7 @@ from pixiu.state import State
 def settings_page() -> rx.Component:
     return rx.vstack(
         rx.heading("⚙️ 设置", size="lg"),
-        
+
         rx.form(
             rx.vstack(
                 rx.form_label("GLM API Key"),
@@ -676,15 +680,15 @@ def settings_page() -> rx.Component:
                 rx.button("保存设置"),
             ),
         ),
-        
+
         rx.divider(),
-        
+
         rx.vstack(
             rx.heading("数据管理", size="md"),
             rx.button("更新所有股票数据", on_click=lambda: None),
             rx.button("清除缓存", on_click=lambda: None),
         ),
-        
+
         spacing="4",
         padding="4",
     )
@@ -737,6 +741,7 @@ git commit -m "feat: add UI framework with pages and state management"
 ### Task 2.1: 创建策略基类和注册机制
 
 **Files:**
+
 - Create: `pixiu/strategies/__init__.py`
 - Create: `pixiu/strategies/base.py`
 
@@ -751,33 +756,33 @@ class BaseStrategy(ABC):
     name: str = ""
     description: str = ""
     params: dict[str, Any] = {}
-    
+
     @abstractmethod
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         """生成交易信号
-        
+
         Args:
             df: 行情数据，包含 trade_date, open, high, low, close, volume
-            
+
         Returns:
             添加 signal 列的DataFrame
             signal: 1=买入, -1=卖出, 0=持有
         """
         pass
-    
+
     @abstractmethod
     def get_required_columns(self) -> list[str]:
         """返回需要的数据列"""
         pass
-    
+
     def get_params_schema(self) -> dict:
         """返回参数的schema用于UI渲染"""
         return {}
-    
+
     def set_param(self, key: str, value: Any):
         """设置参数"""
         self.params[key] = value
-    
+
     def get_documentation(self) -> str:
         """返回策略的数学原理说明"""
         return ""
@@ -817,6 +822,7 @@ git commit -m "feat: add strategy base class and registry"
 ### Task 2.2: 实现趋势强度策略
 
 **Files:**
+
 - Create: `pixiu/strategies/trend_strength.py`
 - Modify: `pixiu/strategies/__init__.py`
 
@@ -836,40 +842,40 @@ class TrendStrengthStrategy(BaseStrategy):
         "threshold": 0.02,
         "window": 20,
     }
-    
+
     def get_required_columns(self) -> list[str]:
         return ["close"]
-    
+
     def get_params_schema(self) -> dict:
         return {
             "threshold": {"type": "float", "min": 0.01, "max": 0.1, "default": 0.02, "label": "趋势强度阈值"},
             "window": {"type": "int", "min": 5, "max": 60, "default": 20, "label": "观察窗口(天)"},
         }
-    
+
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        
+
         threshold = self.params.get("threshold", 0.02)
         window = self.params.get("window", 20)
-        
+
         df['price_derivative'] = np.gradient(df['close'].values)
-        
+
         df['price_acceleration'] = np.gradient(df['price_derivative'].values)
-        
+
         rolling_std = df['close'].rolling(window=window).std()
         df['trend_strength'] = df['price_derivative'] / rolling_std
-        
+
         conditions = [
             (df['trend_strength'] > threshold) & (df['price_acceleration'] > 0),
             (df['trend_strength'] < -threshold) & (df['price_acceleration'] < 0),
         ]
         choices = [1, -1]
-        
+
         df['signal'] = np.select(conditions, choices, default=0)
         df['signal_strength'] = np.abs(df['trend_strength'])
-        
+
         return df
-    
+
     def get_documentation(self) -> str:
         return """
 ## 趋势强度策略
@@ -947,6 +953,7 @@ git commit -m "feat: add trend strength strategy with calculus-based signals"
 ### Task 2.3: 实现回测引擎
 
 **Files:**
+
 - Create: `pixiu/services/backtest_service.py`
 - Create: `pixiu/models/backtest.py`
 - Modify: `pixiu/services/__init__.py`
@@ -972,7 +979,7 @@ class BacktestResult:
     end_date: date
     initial_capital: float
     final_capital: float
-    
+
     total_return: float
     annualized_return: float
     max_drawdown: float
@@ -980,11 +987,11 @@ class BacktestResult:
     win_rate: float
     profit_loss_ratio: float
     calmar_ratio: float
-    
+
     total_trades: int
     winning_trades: int
     losing_trades: int
-    
+
     trades: list[Trade] = field(default_factory=list)
     daily_values: list[float] = field(default_factory=list)
     drawdowns: list[float] = field(default_factory=list)
@@ -1010,40 +1017,40 @@ from pixiu.models.backtest import BacktestConfig, BacktestResult, Trade
 class BacktestEngine:
     def __init__(self, config: Optional[BacktestConfig] = None):
         self.config = config or BacktestConfig()
-    
+
     def run(self, df: pd.DataFrame, signals: pd.Series) -> BacktestResult:
         """执行回测"""
         cash = self.config.initial_capital
         shares = 0.0
         portfolio_value = cash
-        
+
         daily_values = []
         trades = []
         drawdowns = []
         peak_value = cash
-        
+
         winning_trades = 0
         losing_trades = 0
         total_profit = 0.0
         total_loss = 0.0
-        
+
         df = df.copy()
         df['signal'] = signals.reindex(df.index).fillna(0)
-        
+
         for i, (idx, row) in enumerate(df.iterrows()):
             signal = row['signal']
             price = row['close']
-            
+
             adjusted_price = price * (1 + self.config.slippage_rate * np.sign(signal))
-            
+
             if signal == 1 and cash > 0 and shares == 0:
                 position_value = cash * self.config.position_size
                 shares_to_buy = position_value / adjusted_price
                 commission = shares_to_buy * adjusted_price * self.config.commission_rate
-                
+
                 shares = shares_to_buy
                 cash = cash - position_value - commission
-                
+
                 trades.append(Trade(
                     date=idx.date() if hasattr(idx, 'date') else idx,
                     type='BUY',
@@ -1051,11 +1058,11 @@ class BacktestEngine:
                     price=adjusted_price,
                     commission=commission
                 ))
-            
+
             elif signal == -1 and shares > 0:
                 commission = shares * adjusted_price * self.config.commission_rate
                 sell_value = shares * adjusted_price - commission
-                
+
                 buy_trade = [t for t in trades if t.type == 'BUY'][-1] if trades else None
                 if buy_trade:
                     profit = sell_value - (buy_trade.shares * buy_trade.price)
@@ -1065,10 +1072,10 @@ class BacktestEngine:
                     else:
                         losing_trades += 1
                         total_loss += abs(profit)
-                
+
                 cash = cash + sell_value
                 shares = 0
-                
+
                 trades.append(Trade(
                     date=idx.date() if hasattr(idx, 'date') else idx,
                     type='SELL',
@@ -1076,32 +1083,32 @@ class BacktestEngine:
                     price=adjusted_price,
                     commission=commission
                 ))
-            
+
             portfolio_value = cash + shares * price
             daily_values.append(portfolio_value)
-            
+
             if portfolio_value > peak_value:
                 peak_value = portfolio_value
             drawdown = (peak_value - portfolio_value) / peak_value
             drawdowns.append(drawdown)
-        
+
         final_value = cash + shares * df.iloc[-1]['close']
-        
+
         total_trades = len([t for t in trades if t.type == 'SELL'])
-        
+
         returns = pd.Series(daily_values).pct_change().dropna()
         annualized_return = (final_value / self.config.initial_capital) ** (252 / len(df)) - 1
         max_drawdown = max(drawdowns)
-        
+
         sharpe_ratio = 0.0
         if len(returns) > 0 and returns.std() > 0:
             excess_return = annualized_return - self.config.risk_free_rate
             sharpe_ratio = excess_return / (returns.std() * np.sqrt(252))
-        
+
         win_rate = winning_trades / total_trades if total_trades > 0 else 0
         profit_loss_ratio = total_profit / total_loss if total_loss > 0 else 0
         calmar_ratio = annualized_return / max_drawdown if max_drawdown > 0 else 0
-        
+
         return BacktestResult(
             start_date=df.index[0].date() if hasattr(df.index[0], 'date') else df.index[0],
             end_date=df.index[-1].date() if hasattr(df.index[-1], 'date') else df.index[-1],
@@ -1178,6 +1185,7 @@ git commit -m "feat: add backtest engine with performance metrics"
 ### Task 3.1: 添加Plotly图表组件
 
 **Files:**
+
 - Create: `pixiu/components/chart_panel.py`
 - Create: `pixiu/utils/visualization.py`
 - Modify: `pixiu/components/__init__.py`
@@ -1193,7 +1201,7 @@ from typing import Optional
 def create_candlestick_chart(df: pd.DataFrame, signals: pd.Series = None) -> go.Figure:
     """创建K线图"""
     fig = go.Figure()
-    
+
     fig.add_trace(go.Candlestick(
         x=df.index,
         open=df['open'],
@@ -1202,11 +1210,11 @@ def create_candlestick_chart(df: pd.DataFrame, signals: pd.Series = None) -> go.
         close=df['close'],
         name='K线',
     ))
-    
+
     if signals is not None:
         buy_signals = df.index[signals == 1]
         sell_signals = df.index[signals == -1]
-        
+
         if len(buy_signals) > 0:
             fig.add_trace(go.Scatter(
                 x=buy_signals,
@@ -1215,7 +1223,7 @@ def create_candlestick_chart(df: pd.DataFrame, signals: pd.Series = None) -> go.
                 marker=dict(symbol='triangle-up', size=15, color='red'),
                 name='买入信号'
             ))
-        
+
         if len(sell_signals) > 0:
             fig.add_trace(go.Scatter(
                 x=sell_signals,
@@ -1224,28 +1232,28 @@ def create_candlestick_chart(df: pd.DataFrame, signals: pd.Series = None) -> go.
                 marker=dict(symbol='triangle-down', size=15, color='green'),
                 name='卖出信号'
             ))
-    
+
     fig.update_layout(
         xaxis_rangeslider_visible=False,
         height=500,
         margin=dict(l=0, r=0, t=0, b=0),
     )
-    
+
     return fig
 
 def create_returns_chart(daily_values: list[float], benchmark: list[float] = None) -> go.Figure:
     """创建收益曲线图"""
     fig = go.Figure()
-    
+
     returns = [(v / daily_values[0] - 1) * 100 for v in daily_values]
-    
+
     fig.add_trace(go.Scatter(
         y=returns,
         mode='lines',
         name='策略收益',
         line=dict(color='blue', width=2),
     ))
-    
+
     if benchmark:
         benchmark_returns = [(v / benchmark[0] - 1) * 100 for v in benchmark]
         fig.add_trace(go.Scatter(
@@ -1254,19 +1262,19 @@ def create_returns_chart(daily_values: list[float], benchmark: list[float] = Non
             name='基准收益',
             line=dict(color='gray', width=1, dash='dash'),
         ))
-    
+
     fig.update_layout(
         yaxis_title='收益率 (%)',
         height=300,
         margin=dict(l=0, r=0, t=0, b=0),
     )
-    
+
     return fig
 
 def create_drawdown_chart(drawdowns: list[float]) -> go.Figure:
     """创建回撤图"""
     fig = go.Figure()
-    
+
     fig.add_trace(go.Scatter(
         y=[-d * 100 for d in drawdowns],
         mode='lines',
@@ -1274,13 +1282,13 @@ def create_drawdown_chart(drawdowns: list[float]) -> go.Figure:
         name='回撤',
         line=dict(color='red'),
     ))
-    
+
     fig.update_layout(
         yaxis_title='回撤 (%)',
         height=200,
         margin=dict(l=0, r=0, t=0, b=0),
     )
-    
+
     return fig
 ```
 
@@ -1315,6 +1323,7 @@ git commit -m "feat: add Plotly chart components for visualization"
 ### Task 3.2: 完善回测页面
 
 **Files:**
+
 - Modify: `pixiu/pages/backtest.py`
 - Modify: `pixiu/state.py`
 
@@ -1330,41 +1339,41 @@ import plotly.graph_objects as go
 
 class State(rx.State):
     # ... 之前的状态变量 ...
-    
+
     backtest_result: dict = {}
     candlestick_figure: go.Figure = None
     returns_figure: go.Figure = None
     drawdown_figure: go.Figure = None
-    
+
     @rx.background
     async def run_backtest(self):
         async with self:
             self.is_loading = True
             self.loading_message = "正在执行回测..."
-        
+
         if self.stock_data.empty or not self.selected_strategies:
             async with self:
                 self.is_loading = False
             return
-        
+
         strategy = get_strategy(self.selected_strategies[0])
         if not strategy:
             async with self:
                 self.is_loading = False
             return
-        
+
         df = self.stock_data.copy()
         df.set_index('trade_date', inplace=True)
-        
+
         result_df = strategy.generate_signals(df)
-        
+
         engine = BacktestEngine()
         result = engine.run(df, result_df['signal'])
-        
+
         candlestick = create_candlestick_chart(df, result_df['signal'])
         returns = create_returns_chart(result.daily_values)
         drawdown = create_drawdown_chart(result.drawdowns)
-        
+
         async with self:
             self.backtest_result = {
                 'total_return': f"{result.total_return:.2%}",
@@ -1401,7 +1410,7 @@ def metric_card(label: str, value: str, color: str = "black") -> rx.Component:
 def backtest_page() -> rx.Component:
     return rx.vstack(
         rx.heading(f"📋 回测报告 - {State.current_stock_name}", size="lg"),
-        
+
         rx.hstack(
             metric_card("年化收益", State.backtest_result.get('annualized_return', '--'), 
                        "green" if "+" in State.backtest_result.get('annualized_return', '') else "red"),
@@ -1410,7 +1419,7 @@ def backtest_page() -> rx.Component:
             metric_card("胜率", State.backtest_result.get('win_rate', '--'), "purple"),
             spacing="4",
         ),
-        
+
         rx.tabs(
             rx.tab_list(
                 rx.tab("K线图"),
@@ -1438,7 +1447,7 @@ def backtest_page() -> rx.Component:
                 ),
             ),
         ),
-        
+
         rx.box(
             rx.heading("🤖 AI 智能分析", size="md"),
             rx.cond(
@@ -1457,12 +1466,12 @@ def backtest_page() -> rx.Component:
             border_left="4px solid",
             border_color="blue.500",
         ),
-        
+
         rx.hstack(
             rx.button("重新分析", on_click=rx.redirect("/analysis")),
             rx.button("返回首页", on_click=rx.redirect("/")),
         ),
-        
+
         spacing="4",
         padding="4",
     )
@@ -1482,6 +1491,7 @@ git commit -m "feat: complete backtest page with charts and metrics"
 ### Task 4.1: 实现AI分析服务
 
 **Files:**
+
 - Create: `pixiu/services/ai_service.py`
 - Modify: `pixiu/services/__init__.py`
 - Modify: `pixiu/state.py`
@@ -1496,19 +1506,19 @@ import os
 class AIReportService:
     _instance: Optional['AIReportService'] = None
     _client: Optional[ZhipuAI] = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def configure(self, api_key: str):
         self._client = ZhipuAI(api_key=api_key)
-    
+
     @property
     def is_configured(self) -> bool:
         return self._client is not None
-    
+
     async def generate_analysis(
         self,
         backtest_result: dict,
@@ -1517,7 +1527,7 @@ class AIReportService:
     ) -> str:
         if not self.is_configured:
             return "错误：请先在设置页面配置GLM API Key"
-        
+
         system_prompt = """你是一位专业的量化投资分析师。
 你的任务是将回测数据转化为通俗易懂的投资建议。
 请用中文回答，结构清晰，包含：
@@ -1528,7 +1538,7 @@ class AIReportService:
 5. 🎯 适用场景
 
 语气专业但亲切，避免过于技术性的表述。"""
-        
+
         user_prompt = f"""请分析以下量化策略的回测结果：
 
 **股票**: {stock_name}
@@ -1544,7 +1554,7 @@ class AIReportService:
 - 总交易次数: {backtest_result.get('total_trades', '--')}
 
 请给出专业的分析报告。"""
-        
+
         try:
             response = self._client.chat.completions.create(
                 model="glm-5",
@@ -1578,27 +1588,27 @@ from pixiu.services.ai_service import ai_service
 
 class State(rx.State):
     # ... 之前的状态 ...
-    
+
     def set_glm_api_key(self, key: str):
         self.glm_api_key = key
         ai_service.configure(key)
-    
+
     @rx.background
     async def generate_ai_report(self):
         if not ai_service.is_configured:
             async with self:
                 self.ai_report = "请先在设置页面配置GLM API Key"
             return
-        
+
         async with self:
             self.ai_generating = True
-        
+
         report = await ai_service.generate_analysis(
             self.backtest_result,
             self.current_stock_name,
             self.selected_strategies[0] if self.selected_strategies else "未知策略"
         )
-        
+
         async with self:
             self.ai_report = report
             self.ai_generating = False
@@ -1613,7 +1623,7 @@ from pixiu.services.ai_service import ai_service
 
 async def test():
     ai_service.configure("your_api_key_here")
-    
+
     result = {
         'annualized_return': '+28.5%',
         'max_drawdown': '-12.3%',
@@ -1623,7 +1633,7 @@ async def test():
         'calmar_ratio': '2.3',
         'total_trades': '48'
     }
-    
+
     report = await ai_service.generate_analysis(result, "贵州茅台", "趋势强度")
     print(report)
 
@@ -1644,6 +1654,7 @@ git commit -m "feat: add GLM-5 AI analysis service integration"
 ### Task 5.1: 添加更多策略
 
 **Files:**
+
 - Create: `pixiu/strategies/volatility.py`
 - Create: `pixiu/strategies/kalman_filter.py`
 
@@ -1664,38 +1675,38 @@ class VolatilityStrategy(BaseStrategy):
         "entry_threshold": 2.0,
         "exit_threshold": 0.5,
     }
-    
+
     def get_required_columns(self) -> list[str]:
         return ["close", "high", "low"]
-    
+
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        
+
         window = self.params.get("window", 20)
         entry_threshold = self.params.get("entry_threshold", 2.0)
         exit_threshold = self.params.get("exit_threshold", 0.5)
-        
+
         df['returns'] = df['close'].pct_change()
         df['volatility'] = df['returns'].rolling(window).std() * np.sqrt(252)
-        
+
         df['vol_ma'] = df['volatility'].rolling(window).mean()
         df['vol_std'] = df['volatility'].rolling(window).std()
         df['vol_zscore'] = (df['volatility'] - df['vol_ma']) / df['vol_std']
-        
+
         true_range = df['high'] - df['low']
         df['atr'] = true_range.rolling(window).mean()
         df['price_zscore'] = (df['close'] - df['close'].rolling(window).mean()) / df['close'].rolling(window).std()
-        
+
         conditions = [
             (df['vol_zscore'] > entry_threshold) & (df['price_zscore'] < -1),
             (df['vol_zscore'] < -entry_threshold) | (df['price_zscore'] > 2),
         ]
         choices = [1, -1]
-        
+
         df['signal'] = np.select(conditions, choices, default=0)
-        
+
         return df
-    
+
     def get_documentation(self) -> str:
         return """
 ## 波动率套利策略
@@ -1728,43 +1739,43 @@ class KalmanFilterStrategy(BaseStrategy):
         "process_variance": 1e-5,
         "measurement_variance": 1e-3,
     }
-    
+
     def get_required_columns(self) -> list[str]:
         return ["close"]
-    
+
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        
+
         Q = self.params.get("process_variance", 1e-5)
         R = self.params.get("measurement_variance", 1e-3)
-        
+
         n = len(df)
         x = np.zeros(n)
         P = np.zeros(n)
-        
+
         x[0] = df['close'].iloc[0]
         P[0] = 1.0
-        
+
         for i in range(1, n):
             x[i] = x[i-1]
             P[i] = P[i-1] + Q
-            
+
             K = P[i] / (P[i] + R)
             x[i] = x[i] + K * (df['close'].iloc[i] - x[i])
             P[i] = (1 - K) * P[i]
-        
+
         df['kalman_estimate'] = x
         df['kalma_derivative'] = np.gradient(x)
         df['residual'] = df['close'] - x
-        
+
         residual_std = df['residual'].rolling(20).std()
         df['signal'] = np.where(
             df['residual'] < -2 * residual_std, 1,
             np.where(df['residual'] > 2 * residual_std, -1, 0)
         )
-        
+
         return df
-    
+
     def get_documentation(self) -> str:
         return """
 ## 卡尔曼滤波策略
@@ -1815,6 +1826,7 @@ git commit -m "feat: add volatility and kalman filter strategies"
 ### Task 5.2: 完善设置页面和配置持久化
 
 **Files:**
+
 - Create: `pixiu/utils/config_manager.py`
 - Modify: `pixiu/pages/settings.py`
 
@@ -1868,25 +1880,25 @@ from pixiu.utils.config_manager import load_config, save_config
 class SettingsState(rx.State):
     glm_api_key: str = ""
     api_key_saved: bool = False
-    
+
     def on_load(self):
         config = load_config()
         self.glm_api_key = config.get("glm_api_key", "")
-    
+
     def save_api_key(self):
         from pixiu.services.ai_service import ai_service
         ai_service.configure(self.glm_api_key)
-        
+
         config = load_config()
         config["glm_api_key"] = self.glm_api_key
         save_config(config)
-        
+
         self.api_key_saved = True
 
 def settings_page() -> rx.Component:
     return rx.vstack(
         rx.heading("⚙️ 设置", size="lg"),
-        
+
         rx.box(
             rx.heading("GLM API 配置", size="md"),
             rx.text("配置智谱AI GLM-5 API密钥，用于生成智能分析报告"),
@@ -1906,7 +1918,7 @@ def settings_page() -> rx.Component:
             bg="gray.50",
             border_radius="md",
         ),
-        
+
         rx.box(
             rx.heading("回测参数", size="md"),
             rx.text("默认回测配置"),
@@ -1925,7 +1937,7 @@ def settings_page() -> rx.Component:
             border_radius="md",
             margin_top="1rem",
         ),
-        
+
         rx.box(
             rx.heading("数据管理", size="md"),
             rx.vstack(
@@ -1937,7 +1949,7 @@ def settings_page() -> rx.Component:
             border_radius="md",
             margin_top="1rem",
         ),
-        
+
         spacing="4",
         padding="4",
         on_mount=SettingsState.on_load,
@@ -1960,6 +1972,7 @@ git commit -m "feat: add config persistence and improved settings page"
 Run: `reflex run`
 
 测试流程：
+
 1. 打开首页，搜索"茅台"
 2. 选择股票，等待数据加载
 3. 进入分析页面，选择策略
