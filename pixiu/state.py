@@ -22,7 +22,14 @@ class State(rx.State):
     STEP_STRATEGY = 4
     STEP_CONFIG = 5
     STEP_RESULT = 6
-    
+
+    REGIME_STRATEGY_MAP = {
+        ("trend", "trend"): ["趋势强度策略", "均线策略", "动量策略"],
+        ("trend", "range"): ["网格交易策略", "RSI策略", "波动率套利策略"],
+        ("range", "trend"): ["趋势强度策略", "动量策略"],
+        ("range", "range"): ["网格交易策略", "RSI策略", "波动率套利策略", "均值回归策略"],
+    }
+
     current_step: int = 1
     max_step: int = 1
     
@@ -51,6 +58,7 @@ class State(rx.State):
     stock_regime: str = "unknown"
     market_index_data: Dict = {}
     using_mock_data: bool = False
+    recommended_strategies: List[str] = []
     regime_analysis: Dict = {}
     combine_mode: str = "complementary"
     filter_threshold: int = 2
@@ -400,8 +408,9 @@ class State(rx.State):
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
                     self.using_mock_data = True
-            
-            # Advance to strategy selection
+
+            self.recommended_strategies = self.regime_recommendations
+
             self.current_step = self.STEP_STRATEGY
             self.max_step = max(self.max_step, self.STEP_STRATEGY)
             
@@ -420,3 +429,9 @@ class State(rx.State):
     def backtest_results_empty(self) -> bool:
         """Check if backtest results are empty."""
         return len(self.backtest_results) == 0
+
+    @rx.var
+    def regime_recommendations(self) -> List[str]:
+        """Get strategy recommendations based on regime analysis."""
+        key = (self.market_regime, self.stock_regime)
+        return self.REGIME_STRATEGY_MAP.get(key, [])
