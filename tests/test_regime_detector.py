@@ -66,13 +66,13 @@ class TestMarketRegimeDetector:
         """测试趋势识别"""
         detector = MarketRegimeDetector()
         regime = detector.detect_regime(trend_data)
-        assert regime in ['trend', 'range']
+        assert regime == 'trend'
     
     def test_detect_regime_range(self, range_data):
         """测试震荡识别"""
         detector = MarketRegimeDetector()
         regime = detector.detect_regime(range_data)
-        assert regime in ['trend', 'range']
+        assert regime == 'range'
     
     def test_get_analysis_detail(self, trend_data):
         """测试详细分析"""
@@ -82,3 +82,22 @@ class TestMarketRegimeDetector:
         assert 'adx' in detail
         assert 'ma_slope' in detail
         assert 'volatility' in detail
+    
+    def test_missing_columns_raises_error(self):
+        """测试缺少必需列时抛出异常"""
+        detector = MarketRegimeDetector()
+        df = pd.DataFrame({'a': [1, 2, 3]})
+        with pytest.raises(ValueError, match="缺少必需的列"):
+            detector.detect_regime(df)
+    
+    def test_insufficient_data_returns_range(self):
+        """测试数据不足时返回range"""
+        detector = MarketRegimeDetector()
+        df = pd.DataFrame({
+            'open': [10, 11],
+            'high': [11, 12],
+            'low': [9, 10],
+            'close': [10.5, 11.5]
+        })
+        regime = detector.detect_regime(df)
+        assert regime == 'range'

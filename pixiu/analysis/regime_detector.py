@@ -3,6 +3,8 @@ from typing import Dict
 import pandas as pd
 import numpy as np
 
+EPSILON = 1e-10
+
 
 class MarketRegimeDetector:
     """大盘/个股择势判断
@@ -25,14 +27,22 @@ class MarketRegimeDetector:
             
         Returns:
             'trend' 或 'range'
+            
+        Raises:
+            ValueError: 如果缺少必需的列
         """
+        required_cols = ['open', 'high', 'low', 'close']
+        missing = [col for col in required_cols if col not in df.columns]
+        if missing:
+            raise ValueError(f"缺少必需的列: {missing}")
+        
         if len(df) < max(self.adx_period, self.ma_period, self.vol_period) + 10:
             return "range"
         
         adx = self._calc_adx(df)
         slope = self._calc_ma_slope(df)
         vol = self._calc_volatility(df)
-        vol_ma = df['close'].pct_change().rolling(self.vol_period).std().iloc[-1]
+        vol_ma = self._calc_volatility(df)
         
         trend_score = 0.0
         
@@ -74,7 +84,7 @@ class MarketRegimeDetector:
         plus_di = 100 * (plus_dm.rolling(self.adx_period).mean() / atr)
         minus_di = 100 * (minus_dm.rolling(self.adx_period).mean() / atr)
         
-        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + EPSILON)
         adx = dx.rolling(self.adx_period).mean()
         
         return float(adx.iloc[-1]) if not pd.isna(adx.iloc[-1]) else 0.0
@@ -82,7 +92,7 @@ class MarketRegimeDetector:
     def _calc_ma_slope(self, df: pd.DataFrame) -> float:
         """计算MA斜率
         
-        |斜率| > 0.5% 表示趋势行情
+        |斜率| > 0.005 (0.5%) 表示趋势行情
         """
         ma = df['close'].rolling(self.ma_period).mean()
         
