@@ -116,15 +116,71 @@ class DataService:
         
         return mock_results[:20]
     
-    async def fetch_stock_history(
+     async def fetch_stock_history(
         self, 
         code: str, 
         market: str = "A股",
         start_date: str = None,
         end_date: str = None
     ) -> pd.DataFrame:
-        """获取股票历史数据"""
+        """获取股票历史数据 - 尝试真实API，失败则用mock"""
+        if not self.use_mock:
+            try:
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(self._fetch_from_akshare, code, market),
+                    timeout=30
+                )
+                if df is not None and not df.empty:
+                    logger.info(f"成功从AKShare获取 {code} 数据")
+                    return df
+            except Exception as e:
+                logger.warning(f"AKShare获取失败: {e}，使用模拟数据")
         return self._generate_mock_history(code)
+    
+    def _fetch_from_akshare(self, code: str, market: str) -> pd.DataFrame:
+        """从AKShare获取数据"""
+        if ak is None:
+            raise ImportError("akshare not installed")
+        
+        if market == "A股":
+            df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="")
+            df = df.rename(columns={
+                '日期': 'trade_date',
+                '开盘': 'open',
+                '最高': 'high',
+                '最低': 'low',
+                '收盘': 'close',
+                '成交量': 'volume',
+                '成交额': 'amount',
+            })
+        elif market == "港股":
+            df = ak.stock_hk_hist(symbol=code, adjust="")
+            df = df.rename(columns={
+                'date': 'trade_date',
+                'open': 'open',
+                'high': 'high',
+                'low': 'low',
+                'close': 'close',
+                'volume': 'volume',
+            })
+            if 'amount' not in df.columns:
+                df['amount'] = df['close'] * df['volume']
+        else:
+            df = ak.stock_us_hist(symbol=code, adjust="")
+            df = df.rename(columns={
+                'date': 'trade_date',
+                'open': 'open',
+                'high': 'high',
+                'low': 'low',
+                'close': 'close',
+                'volume': 'volume',
+            })
+            if 'amount' not in df.columns:
+                df['amount'] = df['close'] * df['volume']
+        
+        df['code'] = code
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+        return df.sort_values('trade_date')
     
     def _generate_mock_history(self, code: str) -> pd.DataFrame:
         """生成模拟历史数据"""
@@ -154,9 +210,11 @@ class DataService:
         market: str = "A股",
         force_full: bool = False
     ) -> Tuple[bool, int]:
-        """下载并保存股票数据"""
+        """下载并保存股票数据 - 先尝试真实API，失败则用mock"""
         try:
-            df = self._generate_mock_history(code)
+            df = await self.fetch_stock_history(code, market)
+            if df is None or df.empty:
+                return False, 0
             
             quotes = []
             for _, row in df.iterrows():

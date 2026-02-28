@@ -93,19 +93,20 @@ class State(rx.State):
         self.commission_rate = getattr(config, 'commission_rate', 0.0003)
         self.position_size = getattr(config, 'position_size', 0.95)
     
-    async def ensure_db_initialized(self):
-        """Ensure database tables exist."""
+    async def _ensure_db_initialized(self):
+        """Ensure database tables exist. Internal method without yield."""
         if self._db_initialized:
-            return
+            return True
         try:
             db_path = Path("data/stocks.db")
             db_path.parent.mkdir(parents=True, exist_ok=True)
             db = Database(str(db_path))
             await db.ensure_tables()
             self._db_initialized = True
+            return True
         except Exception as e:
             self.error_message = f"数据库初始化失败: {str(e)}"
-            yield
+            return False
     
     def set_market_a(self):
         self.current_market = "A股"
@@ -197,7 +198,7 @@ class State(rx.State):
             self.selected_strategies = self.selected_strategies + [strategy_name]
     
     async def run_backtest(self):
-        await self.ensure_db_initialized()
+        await self._ensure_db_initialized()
         if not self.selected_stock or not self.selected_strategies:
             self.error_message = "请先选择股票和策略"
             yield
@@ -211,7 +212,7 @@ class State(rx.State):
         
         try:
             db = Database("data/stocks.db")
-            data_service = DataService(db, use_mock=True)
+            data_service = DataService(db, use_mock=False)
             
             self.loading_message = "加载股票数据..."
             yield
@@ -358,15 +359,17 @@ class State(rx.State):
         """Get market index data (上证指数 for A股, etc.)"""
         from pixiu.services.data_service import DataService
         db = Database("data/stocks.db")
-        data_service = DataService(db, use_mock=True)
+        data_service = DataService(db, use_mock=False)
         
         market_codes = {
-            "A股": "000001",  # 上证指数
-            "港股": "HSI",    # 恒生指数
-            "美股": "DJI",    # 道琼斯
+            "A股": "000001",
+            "港股": "HSI",
+            "美股": "DJI",
         }
         code = market_codes.get(self.current_market, "000001")
-        return data_service._generate_mock_history(code)
+        df = await data_service.fetch_stock_history(code, self.current_market)
+        self.using_mock_data = data_service.use_mock
+        return df
     
     async def analyze_regime(self):
         """Analyze both market and stock regime"""
@@ -379,10 +382,10 @@ class State(rx.State):
         yield
         
         try:
-            await self.ensure_db_initialized()
+            await self._ensure_db_initialized()
             
             db = Database("data/stocks.db")
-            data_service = DataService(db, use_mock=True)
+            data_service = DataService(db, use_mock=False)
             detector = MarketRegimeDetector()
             
             # Analyze market index
