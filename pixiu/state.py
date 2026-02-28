@@ -590,6 +590,10 @@ class State(rx.State):
         key = f"{self.market_regime}_{self.stock_regime}"
         return self.REGIME_STRATEGY_MAP.get(key, [])
 
+    def get_backtest_chart(self, strategy: str) -> str:
+        """Get backtest chart for a specific strategy."""
+        return self.backtest_charts.get(strategy, "")
+
     async def explain_concept(self, concept: str, value: str = ""):
         """Generate AI explanation for a concept."""
         self.explain_modal_open = True

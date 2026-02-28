@@ -15,7 +15,7 @@ def explain_button(concept: str, value: str = "") -> rx.Component:
         variant="ghost",
         size="1",
         color="#6b7280",
-        on_click=State.explain_concept(concept, value),
+        on_click=lambda: State.explain_concept(concept, value),
         cursor="pointer",
         _hover={"color": "#00d9ff"},
     )
@@ -54,7 +54,7 @@ def metric_with_explain(
                     color="#a0a0b0",
                 ),
                 explain_button(concept, value),
-                spacing="0.5rem",
+                spacing="2",
                 align_items="center",
             ),
             rx.text(
@@ -71,7 +71,7 @@ def metric_with_explain(
                     color="#6b7280",
                 ),
             ),
-            spacing="0.5rem",
+            spacing="2",
             align_items="flex_start",
         ),
         bg="#1a1a24",
@@ -107,7 +107,7 @@ def explain_modal() -> rx.Component:
                         rx.vstack(
                             rx.spinner(color="#00d9ff", size="3"),
                             rx.text("AI 正在生成解释...", color="#6b7280"),
-                            spacing="1rem",
+                            spacing="4",
                             align_items="center",
                             padding="2rem",
                         ),
@@ -126,7 +126,7 @@ def explain_modal() -> rx.Component:
                             width="100%",
                         ),
                     ),
-                    spacing="1rem",
+                    spacing="4",
                     width="100%",
                 ),
             ),
@@ -137,5 +137,5 @@ def explain_modal() -> rx.Component:
             width="90%",
         ),
         open=State.explain_modal_open,
-        on_open_change=lambda open: State.close_explain_modal() if not open else None,
+        on_open_change=State.close_explain_modal,
     )

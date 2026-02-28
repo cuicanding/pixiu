@@ -653,7 +653,7 @@ def render_backtest_result(result: dict) -> rx.Component:
                 State.backtest_charts.contains(result["strategy"]),
                 rx.box(
                     rx.image(
-                        src=f"data:image/png;base64,{State.backtest_charts[result['strategy']]}",
+                        src=f"data:image/png;base64,{State.get_backtest_chart(result['strategy'])}",
                         width="100%",
                         border_radius="md",
                     ),
