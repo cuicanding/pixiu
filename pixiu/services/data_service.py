@@ -273,8 +273,9 @@ class DataService:
             )
             
             if rs is None or rs.error_code != '0':
+                error_code = rs.error_code if rs is not None else 'N/A'
                 error_msg = rs.error_msg if rs is not None else "rs is None"
-                logger.error(f"baostock查询失败: {code}, error_code: {rs.error_code if rs is not None else 'N/A'}, error_msg: {error_msg}")
+                logger.error(f"baostock查询失败: {code}, error_code: {error_code}, error_msg: {error_msg}")
                 return pd.DataFrame()
             
             data_list = []
