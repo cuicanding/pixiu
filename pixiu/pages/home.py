@@ -2,6 +2,7 @@
 
 import reflex as rx
 from pixiu.state import State
+from pixiu.components.explain_button import explain_button, explain_modal
 
 
 def step_indicator() -> rx.Component:
@@ -373,14 +374,31 @@ def step_regime_analysis() -> rx.Component:
                     rx.box(
                         rx.text("分析指标", font_size="sm", color="gray.400", margin_bottom="0.5rem"),
                         rx.hstack(
-                            rx.text(f"ADX: ", font_size="sm"),
-                            rx.text(State.regime_analysis.get("adx", 0), font_size="sm"),
+                            rx.hstack(
+                                rx.text(f"ADX: ", font_size="sm"),
+                                rx.text(State.regime_analysis.get("adx", 0), font_size="sm"),
+                                explain_button("adx", State.regime_analysis.get("adx", "")),
+                                spacing="1",
+                                align_items="center",
+                            ),
                             rx.text("|", color="gray.600"),
-                            rx.text(f"MA斜率: ", font_size="sm"),
-                            rx.text(State.regime_analysis.get("ma_slope", 0), font_size="sm"),
+                            rx.hstack(
+                                rx.text(f"MA斜率: ", font_size="sm"),
+                                rx.text(State.regime_analysis.get("ma_slope", 0), font_size="sm"),
+                                explain_button("ma_slope", State.regime_analysis.get("ma_slope", "")),
+                                spacing="1",
+                                align_items="center",
+                            ),
                             rx.text("|", color="gray.600"),
-                            rx.text(f"波动率: ", font_size="sm"),
-                            rx.text(State.regime_analysis.get("volatility", 0), font_size="sm"),
+                            rx.hstack(
+                                rx.text(f"波动率: ", font_size="sm"),
+                                rx.text(State.regime_analysis.get("volatility", 0), font_size="sm"),
+                                explain_button("volatility", State.regime_analysis.get("volatility", "")),
+                                spacing="1",
+                                align_items="center",
+                            ),
+                            spacing="2",
+                            align_items="center",
                         ),
                         padding="0.75rem",
                         bg="gray.900",
@@ -592,19 +610,39 @@ def render_backtest_result(result: dict) -> rx.Component:
             
             rx.grid(
                 rx.box(
-                    rx.text("年化收益", font_size="sm", color="gray.400"),
+                    rx.hstack(
+                        rx.text("年化收益", font_size="sm", color="gray.400"),
+                        explain_button("annualized_return", result["annualized_return"]),
+                        spacing="1",
+                        align_items="center",
+                    ),
                     rx.text(result["annualized_return"], font_weight="bold"),
                 ),
                 rx.box(
-                    rx.text("最大回撤", font_size="sm", color="gray.400"),
+                    rx.hstack(
+                        rx.text("最大回撤", font_size="sm", color="gray.400"),
+                        explain_button("max_drawdown", result["max_drawdown"]),
+                        spacing="1",
+                        align_items="center",
+                    ),
                     rx.text(result["max_drawdown"], color="red.400"),
                 ),
                 rx.box(
-                    rx.text("夏普比率", font_size="sm", color="gray.400"),
+                    rx.hstack(
+                        rx.text("夏普比率", font_size="sm", color="gray.400"),
+                        explain_button("sharpe_ratio", result["sharpe_ratio"]),
+                        spacing="1",
+                        align_items="center",
+                    ),
                     rx.text(result["sharpe_ratio"]),
                 ),
                 rx.box(
-                    rx.text("胜率", font_size="sm", color="gray.400"),
+                    rx.hstack(
+                        rx.text("胜率", font_size="sm", color="gray.400"),
+                        explain_button("win_rate", result["win_rate"]),
+                        spacing="1",
+                        align_items="center",
+                    ),
                     rx.text(result["win_rate"]),
                 ),
                 columns="4",
@@ -727,6 +765,8 @@ def page() -> rx.Component:
                 rx.link("设置", href="/settings", color_scheme="cyan"),
                 width="100%",
             ),
+            
+            explain_modal(),
             
             spacing="4",
             width="100%",
