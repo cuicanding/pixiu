@@ -4,6 +4,8 @@ import asyncio
 from typing import List, Tuple, Optional
 from datetime import datetime, timedelta
 import pandas as pd
+import socket
+import urllib3
 
 try:
     import akshare as ak
@@ -15,6 +17,8 @@ try:
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
+
+socket.setdefaulttimeout(30)
 
 from pixiu.services.database import Database
 from pixiu.models.stock import Stock, DailyQuote
@@ -39,31 +43,52 @@ class DataService:
             return []
         
         max_retries = 3
-        retry_delay = 2
+        retry_delay = 3
         
         for attempt in range(max_retries):
             try:
                 if market == "A股":
-                    df = await asyncio.to_thread(ak.stock_zh_a_spot_em)
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(ak.stock_zh_a_spot_em),
+                        timeout=30
+                    )
                     filtered = df[df['名称'].str.contains(keyword, na=False)]
                     return [
-                        Stock(code=row['代码'], name=row['名称'], market="A股")
+                        Stock(code=str(row['代码']), name=str(row['名称']), market="A股")
                         for _, row in filtered.head(20).iterrows()
                     ]
                 elif market == "港股":
-                    df = await asyncio.to_thread(ak.stock_hk_spot_em)
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(ak.stock_hk_spot_em),
+                        timeout=30
+                    )
                     filtered = df[df['名称'].str.contains(keyword, na=False)]
                     return [
-                        Stock(code=row['代码'], name=row['名称'], market="港股")
+                        Stock(code=str(row['代码']), name=str(row['名称']), market="港股")
                         for _, row in filtered.head(20).iterrows()
                     ]
                 elif market == "美股":
-                    df = await asyncio.to_thread(ak.stock_us_spot_em)
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(ak.stock_us_spot_em),
+                        timeout=30
+                    )
                     filtered = df[df['名称'].str.contains(keyword, na=False)]
                     return [
-                        Stock(code=row['代码'], name=row['名称'], market="美股")
+                        Stock(code=str(row['代码']), name=str(row['名称']), market="美股")
                         for _, row in filtered.head(20).iterrows()
                     ]
+            except asyncio.TimeoutError:
+                logger.warning(f"搜索{market}股票超时 (尝试 {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    raise TimeoutError(f"搜索{market}股票超时，请稍后重试或切换到其他市场")
+            except (ConnectionError, urllib3.error.URLError) as e:
+                logger.warning(f"网络错误 (尝试 {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    raise ConnectionError(f"网络连接失败，请检查网络后重试")
             except Exception as e:
                 logger.warning(f"搜索股票失败 (尝试 {attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
