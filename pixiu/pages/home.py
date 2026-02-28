@@ -161,6 +161,138 @@ def step_stock_search() -> rx.Component:
                 ),
             ),
             
+            rx.divider(margin_y="1rem"),
+            
+            rx.text("回测时间范围", font_size="lg", font_weight="bold"),
+            
+            rx.vstack(
+                rx.text("快捷选项", font_size="sm", color="gray.400"),
+                rx.hstack(
+                    rx.button(
+                        "近3个月",
+                        size="2",
+                        variant=rx.cond(State.quick_range == "3m", "solid", "outline"),
+                        color_scheme="cyan",
+                        on_click=State.set_quick_range("3m"),
+                    ),
+                    rx.button(
+                        "近6个月",
+                        size="2",
+                        variant=rx.cond(State.quick_range == "6m", "solid", "outline"),
+                        color_scheme="cyan",
+                        on_click=State.set_quick_range("6m"),
+                    ),
+                    rx.button(
+                        "近12个月",
+                        size="2",
+                        variant=rx.cond(State.quick_range == "12m", "solid", "outline"),
+                        color_scheme="cyan",
+                        on_click=State.set_quick_range("12m"),
+                    ),
+                    rx.button(
+                        "近2年",
+                        size="2",
+                        variant=rx.cond(State.quick_range == "24m", "solid", "outline"),
+                        color_scheme="cyan",
+                        on_click=State.set_quick_range("24m"),
+                    ),
+                    spacing="2",
+                    flex_wrap="wrap",
+                ),
+                spacing="2",
+            ),
+            
+            rx.vstack(
+                rx.text("年度选项", font_size="sm", color="gray.400"),
+                rx.hstack(
+                    rx.button(
+                        "今年",
+                        size="2",
+                        variant=rx.cond(
+                            rx.cond(State.time_range_mode == "year", State.year_range == "this_year", False),
+                            "solid",
+                            "outline",
+                        ),
+                        color_scheme="cyan",
+                        on_click=State.set_year_range("this_year"),
+                    ),
+                    rx.button(
+                        "去年",
+                        size="2",
+                        variant=rx.cond(
+                            rx.cond(State.time_range_mode == "year", State.year_range == "last_year", False),
+                            "solid",
+                            "outline",
+                        ),
+                        color_scheme="cyan",
+                        on_click=State.set_year_range("last_year"),
+                    ),
+                    rx.button(
+                        "2023年",
+                        size="2",
+                        variant=rx.cond(
+                            rx.cond(State.time_range_mode == "year", State.year_range == "2023", False),
+                            "solid",
+                            "outline",
+                        ),
+                        color_scheme="cyan",
+                        on_click=State.set_year_range("2023"),
+                    ),
+                    rx.button(
+                        "2024年",
+                        size="2",
+                        variant=rx.cond(
+                            rx.cond(State.time_range_mode == "year", State.year_range == "2024", False),
+                            "solid",
+                            "outline",
+                        ),
+                        color_scheme="cyan",
+                        on_click=State.set_year_range("2024"),
+                    ),
+                    spacing="2",
+                    flex_wrap="wrap",
+                ),
+                spacing="2",
+            ),
+            
+            rx.vstack(
+                rx.text("自定义日期", font_size="sm", color="gray.400"),
+                rx.hstack(
+                    rx.box(
+                        rx.text("开始日期", font_size="xs", color="gray.500"),
+                        rx.input(
+                            type="date",
+                            value=State.custom_start_date,
+                            on_change=State.set_custom_start,
+                            size="2",
+                        ),
+                    ),
+                    rx.box(
+                        rx.text("结束日期", font_size="xs", color="gray.500"),
+                        rx.input(
+                            type="date",
+                            value=State.custom_end_date,
+                            on_change=State.set_custom_end,
+                            size="2",
+                        ),
+                    ),
+                    spacing="4",
+                ),
+                spacing="2",
+            ),
+            
+            rx.box(
+                rx.hstack(
+                    rx.text("当前时间范围:", color="gray.400", font_size="sm"),
+                    rx.text(State.backtest_start_date, color="cyan.400", font_size="sm"),
+                    rx.text("至", color="gray.400", font_size="sm"),
+                    rx.text(State.backtest_end_date, color="cyan.400", font_size="sm"),
+                ),
+                padding="0.75rem",
+                bg="gray.800",
+                border_radius="md",
+            ),
+            
             spacing="3",
         ),
         padding="1.5rem",

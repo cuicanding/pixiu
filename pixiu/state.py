@@ -141,6 +141,12 @@ class State(rx.State):
             elif self.year_range == "last_year":
                 self.backtest_start_date = f"{today.year - 1}-01-01"
                 self.backtest_end_date = f"{today.year - 1}-12-31"
+            elif self.year_range == "2023":
+                self.backtest_start_date = "2023-01-01"
+                self.backtest_end_date = "2023-12-31"
+            elif self.year_range == "2024":
+                self.backtest_start_date = "2024-01-01"
+                self.backtest_end_date = "2024-12-31"
             elif self.year_range == "last_3_years":
                 self.backtest_start_date = f"{today.year - 3}-01-01"
             elif self.year_range == "last_5_years":
