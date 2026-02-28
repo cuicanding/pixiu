@@ -116,7 +116,7 @@ class DataService:
         
         return mock_results[:20]
     
-     async def fetch_stock_history(
+    async def fetch_stock_history(
         self, 
         code: str, 
         market: str = "A股",

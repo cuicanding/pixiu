@@ -252,8 +252,8 @@ class State(rx.State):
                     continue
                 
                 engine = BacktestEngine(backtest_config)
-                signals = strategy.generate_signals(df)
-                result = engine.run(df, signals)
+                df_with_signals = strategy.generate_signals(df)
+                result = engine.run(df_with_signals, df_with_signals['signal'])
                 
                 trades = []
                 for t in result.trades[:50]:
