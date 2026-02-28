@@ -99,11 +99,14 @@ class State(rx.State):
     filter_threshold: int = 2
     regime_chart: str = ""
     market_chart: str = ""
+    _db_initialized: bool = False
     
     explain_modal_open: bool = False
     current_explanation: str = ""
     ai_explaining: bool = False
     glm_api_key: str = ""
+    _db_initialized: bool = False
+    _db_initialized: bool = False
     
     time_range_mode: str = "quick"
     quick_range: str = "12m"
