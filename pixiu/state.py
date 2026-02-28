@@ -584,6 +584,7 @@ class State(rx.State):
 
     def go_to_strategy_step(self):
         """跳转到策略选择步骤"""
+        self.selected_strategies = []
         self.current_step = self.STEP_STRATEGY
         self.max_step = max(self.max_step, self.STEP_STRATEGY)
 
