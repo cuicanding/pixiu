@@ -12,7 +12,6 @@ def step_indicator() -> rx.Component:
         ("搜索股票", State.STEP_SEARCH),
         ("择势分析", State.STEP_REGIME),
         ("选择策略", State.STEP_STRATEGY),
-        ("配置参数", State.STEP_CONFIG),
         ("查看结果", State.STEP_RESULT),
     ]
     return rx.hstack(
@@ -492,6 +491,15 @@ def step_regime_analysis() -> rx.Component:
                         ),
                     ),
                     
+                    rx.button(
+                        "🤖 AI解释择势",
+                        on_click=State.explain_regime_timeline,
+                        color_scheme="purple",
+                        size="2",
+                        margin_top="0.5rem",
+                        is_loading=State.ai_explaining,
+                    ),
+                    
                     rx.hstack(
                         rx.spacer(),
                         rx.button(
@@ -630,52 +638,6 @@ def step_strategy_selection() -> rx.Component:
                 rx.text(" 个策略", color="gray.400"),
             ),
             
-            spacing="3",
-        ),
-        padding="1.5rem",
-        border="1px solid gray.700",
-        border_radius="lg",
-        width="100%",
-    )
-
-
-def step_config() -> rx.Component:
-    """Step 5: Backtest configuration."""
-    return rx.box(
-        rx.vstack(
-            rx.text("配置参数", font_size="lg", font_weight="bold"),
-            
-            rx.vstack(
-                rx.hstack(
-                    rx.text("初始资金:", width="100px"),
-                    rx.input(
-                        value=State.initial_capital,
-                        on_change=State.set_initial_capital,
-                        type="number",
-                        width="200px",
-                    ),
-                ),
-                rx.hstack(
-                    rx.text("手续费率:", width="100px"),
-                    rx.input(
-                        value=State.commission_rate,
-                        on_change=State.set_commission_rate,
-                        type="number",
-                        width="200px",
-                    ),
-                ),
-                rx.hstack(
-                    rx.text("仓位比例:", width="100px"),
-                    rx.input(
-                        value=State.position_size,
-                        on_change=State.set_position_size,
-                        type="number",
-                        width="200px",
-                    ),
-                ),
-                spacing="3",
-            ),
-            
             rx.button(
                 "开始回测",
                 on_click=State.run_backtest,
@@ -683,6 +645,7 @@ def step_config() -> rx.Component:
                 size="3",
                 width="100%",
                 is_loading=State.is_loading,
+                margin_top="1rem",
             ),
             
             rx.cond(
@@ -693,7 +656,7 @@ def step_config() -> rx.Component:
                 ),
             ),
             
-            spacing="4",
+            spacing="3",
         ),
         padding="1.5rem",
         border="1px solid gray.700",
@@ -712,6 +675,13 @@ def render_backtest_result(result: dict) -> rx.Component:
                 rx.badge(
                     result["total_return"],
                     color_scheme="gray",
+                ),
+                rx.button(
+                    "🤖 AI评估",
+                    on_click=State.evaluate_current_backtest(result["strategy"]),
+                    color_scheme="purple",
+                    size="1",
+                    is_loading=State.ai_explaining,
                 ),
             ),
             
@@ -853,10 +823,6 @@ def page() -> rx.Component:
             rx.cond(
                 State.current_step == State.STEP_STRATEGY,
                 step_strategy_selection(),
-            ),
-            rx.cond(
-                State.current_step == State.STEP_CONFIG,
-                step_config(),
             ),
             rx.cond(
                 State.current_step == State.STEP_RESULT,

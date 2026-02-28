@@ -761,3 +761,57 @@ CACHE_DIR=data/cache
     def close_explain_modal(self):
         """Close the explanation modal."""
         self.explain_modal_open = False
+
+    async def explain_regime_timeline(self):
+        """AI解释择势时间线"""
+        if not self.glm_api_key:
+            self.current_explanation = "请先配置GLM API Key"
+            self.explain_modal_open = True
+            yield
+            return
+        
+        self.ai_explaining = True
+        self.explain_modal_open = True
+        self.current_explanation = ""
+        yield
+        
+        try:
+            from pixiu.services.ai_service import AIReportService
+            ai = AIReportService(self.glm_api_key)
+            
+            self.current_explanation = await ai.explain_regime_timeline(
+                self.selected_stock,
+                self.selected_stock_name,
+                self.regime_timeline.get("stock", {})
+            )
+        except Exception as e:
+            self.current_explanation = f"解释生成失败: {str(e)}"
+        finally:
+            self.ai_explaining = False
+        yield
+
+    async def evaluate_current_backtest(self, strategy: str):
+        """AI评估回测结果"""
+        if not self.glm_api_key:
+            self.current_explanation = "请先配置GLM API Key"
+            self.explain_modal_open = True
+            yield
+            return
+        
+        self.ai_explaining = True
+        self.explain_modal_open = True
+        self.current_explanation = ""
+        yield
+        
+        try:
+            from pixiu.services.ai_service import AIReportService
+            ai = AIReportService(self.glm_api_key)
+            
+            result = next((r for r in self.backtest_results if r['strategy'] == strategy), None)
+            if result:
+                self.current_explanation = await ai.evaluate_backtest(strategy, result)
+        except Exception as e:
+            self.current_explanation = f"评估生成失败: {str(e)}"
+        finally:
+            self.ai_explaining = False
+        yield
