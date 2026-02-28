@@ -15,6 +15,16 @@ from pixiu.config import config
 class State(rx.State):
     """Application global state with real service integration."""
     
+    STEP_MARKET = 1
+    STEP_SEARCH = 2
+    STEP_REGIME = 3
+    STEP_STRATEGY = 4
+    STEP_CONFIG = 5
+    STEP_RESULT = 6
+    
+    current_step: int = 1
+    max_step: int = 1
+    
     is_loading: bool = False
     loading_message: str = ""
     progress: int = 0
@@ -95,6 +105,31 @@ class State(rx.State):
     def set_market_us(self):
         self.current_market = "美股"
     
+    def go_to_step(self, step: int):
+        if step <= self.max_step:
+            self.current_step = step
+    
+    def next_step(self):
+        if self.current_step < 6:
+            self.current_step += 1
+            if self.current_step > self.max_step:
+                self.max_step = self.current_step
+    
+    def prev_step(self):
+        if self.current_step > 1:
+            self.current_step -= 1
+    
+    def reset_flow(self):
+        self.current_step = 1
+        self.max_step = 1
+        self.selected_stock = ""
+        self.selected_stock_name = ""
+        self.selected_strategies = []
+        self.backtest_results = []
+        self.regime_analysis = {}
+        self.market_regime = "unknown"
+        self.stock_regime = "unknown"
+    
     def set_search_keyword(self, keyword: str):
         self.search_keyword = keyword
     
@@ -139,6 +174,9 @@ class State(rx.State):
             if stock["code"] == code:
                 self.selected_stock_name = stock["name"]
                 break
+        if self.selected_stock_name:
+            self.current_step = self.STEP_REGIME
+            self.max_step = max(self.max_step, self.STEP_REGIME)
         yield
     
     def toggle_strategy(self, strategy_name: str):
