@@ -83,7 +83,7 @@ class DataService:
                     await asyncio.sleep(retry_delay)
                 else:
                     raise TimeoutError(f"搜索{market}股票超时，请稍后重试或切换到其他市场")
-            except (ConnectionError, urllib3.error.URLError) as e:
+            except (ConnectionError, urllib3.exceptions.HTTPError, urllib3.exceptions.TimeoutError) as e:
                 logger.warning(f"网络错误 (尝试 {attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay)
