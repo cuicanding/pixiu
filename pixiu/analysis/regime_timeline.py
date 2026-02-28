@@ -16,6 +16,15 @@ class RegimeTimelineAnalyzer:
         adx_threshold: float = 25.0,
         slope_threshold: float = 0.005
     ):
+        """Initialize the timeline analyzer.
+        
+        Args:
+            window: Rolling window size in days for regime detection
+            adx_threshold: Threshold for identifying ADX-based turning point triggers
+                (used in trigger identification, not regime detection)
+            slope_threshold: Threshold for identifying slope-based turning point triggers
+                (used in trigger identification, not regime detection)
+        """
         self.window = window
         self.adx_threshold = adx_threshold
         self.slope_threshold = slope_threshold
