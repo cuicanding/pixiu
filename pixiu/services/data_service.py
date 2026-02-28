@@ -168,13 +168,13 @@ class DataService:
                 continue
                 
             if source == "baostock":
-                if market != "A股" and market != "index":
+                if market == "index":
+                    logger.info(f"指数数据不支持Baostock，跳过")
+                    continue
+                if market != "A股":
                     continue
                 if bs is None:
                     logger.warning("baostock未安装，跳过")
-                    continue
-                if code.startswith("688"):
-                    logger.info(f"科创板股票 {code} 不支持Baostock，跳过")
                     continue
                 try:
                     df = await asyncio.wait_for(
@@ -207,63 +207,100 @@ class DataService:
         logger.warning(f"所有数据源均失败，使用模拟数据: {code}")
         return self._generate_mock_history(code)
     
-    def _fetch_from_akshare(self, code: str, market: str) -> pd.DataFrame:
-        """从AKShare获取数据"""
+    def _fetch_from_akshare(self, code: str, market: str, max_retries: int = 3) -> pd.DataFrame:
+        """从AKShare获取数据 - 增加重试机制、延迟和市场后缀支持"""
+        import time
+        import random
+        
         if ak is None:
             raise ImportError("akshare not installed")
         
-        if market == "A股":
-            if code.startswith("688"):
-                df = ak.stock_zh_kcb_daily(symbol=code)
-                df = df.rename(columns={
-                    'date': 'trade_date',
-                    'open': 'open',
-                    'high': 'high',
-                    'low': 'low',
-                    'close': 'close',
-                    'volume': 'volume',
-                })
-                if 'amount' not in df.columns:
-                    df['amount'] = df['close'] * df['volume']
-            else:
-                df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="")
-                df = df.rename(columns={
-                    '日期': 'trade_date',
-                    '开盘': 'open',
-                    '最高': 'high',
-                    '最低': 'low',
-                    '收盘': 'close',
-                    '成交量': 'volume',
-                    '成交额': 'amount',
-                })
-        elif market == "港股":
-            df = ak.stock_hk_hist(symbol=code, adjust="")
-            df = df.rename(columns={
-                'date': 'trade_date',
-                'open': 'open',
-                'high': 'high',
-                'low': 'low',
-                'close': 'close',
-                'volume': 'volume',
-            })
-            if 'amount' not in df.columns:
-                df['amount'] = df['close'] * df['volume']
-        else:
-            df = ak.stock_us_hist(symbol=code, adjust="")
-            df = df.rename(columns={
-                'date': 'trade_date',
-                'open': 'open',
-                'high': 'high',
-                'low': 'low',
-                'close': 'close',
-                'volume': 'volume',
-            })
-            if 'amount' not in df.columns:
-                df['amount'] = df['close'] * df['volume']
+        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+        end_date = datetime.now().strftime("%Y%m%d")
         
-        df['code'] = code
-        df['trade_date'] = pd.to_datetime(df['trade_date'])
-        return df.sort_values('trade_date')
+        for attempt in range(max_retries):
+            try:
+                time.sleep((1 + random.random()) * attempt)
+                
+                if market == "index":
+                    df = ak.stock_zh_index_daily(symbol=f"sh{code}" if code.startswith("0") else f"sz{code}")
+                    df = df.rename(columns={
+                        'date': 'trade_date',
+                        'open': 'open',
+                        'high': 'high',
+                        'low': 'low',
+                        'close': 'close',
+                        'volume': 'volume',
+                    })
+                    if 'amount' not in df.columns:
+                        df['amount'] = df['close'] * df['volume']
+                elif market == "A股":
+                    if code.startswith("688"):
+                        market_suffix = ".SH"
+                        df = ak.stock_zh_a_hist(
+                            symbol=code + market_suffix,
+                            period="daily",
+                            start_date=start_date,
+                            end_date=end_date,
+                            adjust=""
+                        )
+                    else:
+                        market_suffix = ".SH" if code.startswith("6") else ".SZ"
+                        df = ak.stock_zh_a_hist(
+                            symbol=code + market_suffix,
+                            period="daily",
+                            start_date=start_date,
+                            end_date=end_date,
+                            adjust=""
+                        )
+                    df = df.rename(columns={
+                        '日期': 'trade_date',
+                        '开盘': 'open',
+                        '最高': 'high',
+                        '最低': 'low',
+                        '收盘': 'close',
+                        '成交量': 'volume',
+                        '成交额': 'amount',
+                    })
+                elif market == "港股":
+                    df = ak.stock_hk_hist(symbol=code, adjust="")
+                    df = df.rename(columns={
+                        'date': 'trade_date',
+                        'open': 'open',
+                        'high': 'high',
+                        'low': 'low',
+                        'close': 'close',
+                        'volume': 'volume',
+                    })
+                    if 'amount' not in df.columns:
+                        df['amount'] = df['close'] * df['volume']
+                else:
+                    df = ak.stock_us_hist(symbol=code, adjust="")
+                    df = df.rename(columns={
+                        'date': 'trade_date',
+                        'open': 'open',
+                        'high': 'high',
+                        'low': 'low',
+                        'close': 'close',
+                        'volume': 'volume',
+                    })
+                    if 'amount' not in df.columns:
+                        df['amount'] = df['close'] * df['volume']
+                
+                df['code'] = code
+                df['trade_date'] = pd.to_datetime(df['trade_date'])
+                return df.sort_values('trade_date')
+                
+            except Exception as e:
+                error_msg = str(e)
+                if attempt < max_retries - 1:
+                    logger.warning(f"AKShare获取{code}数据失败(尝试 {attempt + 1}/{max_retries}): {error_msg}, 等待重试...")
+                    time.sleep(2 + random.random())
+                else:
+                    logger.error(f"AKShare获取{code}数据失败(已重试{max_retries}次): {error_msg}")
+                    raise
+        
+        raise RuntimeError(f"AKShare获取{code}数据失败: 超过最大重试次数")
     
     def _fetch_from_baostock(
         self, 
@@ -272,7 +309,17 @@ class DataService:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
     ) -> pd.DataFrame:
-        """从Baostock获取数据 - 只支持A股"""
+        """从Baostock获取数据 - 支持所有A股（含科创板）
+        
+        注意：
+        1. 股票代码格式必须带市场前缀：
+           - 科创板（688开头）: sh.688XXX
+           - 沪市主板（60开头）: sh.60XXXX
+           - 创业板（30开头）: sz.30XXXX
+           - 深市主板（00开头）: sz.00XXXX
+        2. 日期格式必须是 YYYY-MM-DD（如 2024-01-01）
+        3. 不支持指数、港股、美股
+        """
         if bs is None:
             raise ImportError("baostock not installed")
         
@@ -280,17 +327,33 @@ class DataService:
             raise ValueError(f"baostock只支持A股，不支持{market}")
         
         if start_date is None:
-            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-        if end_date is None:
-            end_date = datetime.now().strftime("%Y-%m-%d")
-        
-        start_date_fmt = start_date.replace("-", "")
-        end_date_fmt = end_date.replace("-", "")
-        
-        if code.startswith("6"):
-            bs_code = f"sh.{code}"
+            start_date_fmt = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
         else:
+            if "-" in start_date:
+                start_date_fmt = start_date
+            else:
+                start_date_fmt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}"
+        
+        if end_date is None:
+            end_date_fmt = datetime.now().strftime("%Y-%m-%d")
+        else:
+            if "-" in end_date:
+                end_date_fmt = end_date
+            else:
+                end_date_fmt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+        
+        # 确定市场前缀（Baostock要求）
+        # 上交所：60（主板）、68（科创板）→ sh.
+        # 深交所：00（主板）、30（创业板）→ sz.
+        if code.startswith("6"):
+            bs_code = f"sh.{code}"  # 上交所（主板60x、科创板68x）
+        elif code.startswith("0") or code.startswith("3"):
+            bs_code = f"sz.{code}"  # 深交所（主板00x、创业板30x）
+        else:
+            logger.warning(f"未知的股票代码格式: {code}, 尝试使用深交所前缀")
             bs_code = f"sz.{code}"
+        
+        logger.debug(f"Baostock股票代码转换: {code} -> {bs_code}")
         
         lg = None
         try:

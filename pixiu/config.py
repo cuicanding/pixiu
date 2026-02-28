@@ -33,7 +33,7 @@ class Config:
                 "A股": ["baostock", "akshare", "mock"],
                 "港股": ["akshare", "mock"],
                 "美股": ["akshare", "mock"],
-                "index": ["baostock", "mock"],
+                "index": ["akshare", "mock"],
             }
 
     @property

@@ -3,6 +3,7 @@
 import reflex as rx
 from pixiu.state import State
 from pixiu.components.explain_button import explain_button, explain_modal
+from pixiu.components.timeline_view import timeline_view
 
 
 def step_indicator() -> rx.Component:
@@ -487,6 +488,15 @@ def step_regime_analysis() -> rx.Component:
                             padding="1rem",
                             bg="gray.800",
                             border_radius="md",
+                            margin_top="1rem",
+                        ),
+                    ),
+                    
+                    # 时间线择势分析
+                    rx.cond(
+                        State.regime_timeline != {},
+                        rx.box(
+                            timeline_view(State.regime_timeline),
                             margin_top="1rem",
                         ),
                     ),

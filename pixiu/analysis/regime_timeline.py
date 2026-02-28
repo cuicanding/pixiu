@@ -1,7 +1,27 @@
 """时间线择势分析"""
-from typing import Dict, List, Any
+from typing import Dict, List, Any, TypedDict
 import pandas as pd
 from .regime_detector import MarketRegimeDetector
+
+
+class TimelineSegment(TypedDict):
+    start: str
+    end: str
+    regime: str
+    duration: int
+
+
+class TurningPoint(TypedDict):
+    date: str
+    from_regime: str
+    to_regime: str
+    triggers: Dict[str, Any]
+
+
+class RegimeTimelineResult(TypedDict, total=False):
+    segments: List[TimelineSegment]
+    turning_points: List[TurningPoint]
+    current: Dict[str, Any]
 
 
 class RegimeTimelineAnalyzer:
@@ -30,7 +50,7 @@ class RegimeTimelineAnalyzer:
         self.slope_threshold = slope_threshold
         self.detector = MarketRegimeDetector()
     
-    def analyze_timeline(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def analyze_timeline(self, df: pd.DataFrame) -> RegimeTimelineResult:
         """分析时间线择势
         
         Args:
@@ -38,8 +58,8 @@ class RegimeTimelineAnalyzer:
             
         Returns:
             {
-                'segments': [{'start': date, 'end': date, 'regime': 'trend'|'range'}],
-                'turning_points': [{'date': date, 'from': regime, 'to': regime, 'triggers': {...}}],
+                'segments': [{'start': date, 'end': date, 'regime': 'trend'|'range', 'duration': int}],
+                'turning_points': [{'date': date, 'from_regime': regime, 'to_regime': regime, 'triggers': {...}}],
                 'current': {...}
             }
         """
@@ -133,7 +153,12 @@ class RegimeTimelineAnalyzer:
     
     def _identify_triggers(self, prev_detail: Dict, curr_detail: Dict) -> Dict:
         """识别导致转势的触发因素"""
-        triggers = {}
+        triggers = {
+            'adx_cross_up': False,
+            'adx_cross_down': False,
+            'slope_increase': False,
+            'slope_decrease': False
+        }
         
         if prev_detail.get('adx', 0) < self.adx_threshold <= curr_detail.get('adx', 0):
             triggers['adx_cross_up'] = True
@@ -142,9 +167,10 @@ class RegimeTimelineAnalyzer:
         
         prev_slope = abs(prev_detail.get('ma_slope', 0))
         curr_slope = abs(curr_detail.get('ma_slope', 0))
-        if prev_slope < self.slope_threshold <= curr_slope:
+        
+        if curr_slope > prev_slope * 1.5:
             triggers['slope_increase'] = True
-        elif prev_slope >= self.slope_threshold > curr_slope:
+        elif curr_slope < prev_slope * 0.5:
             triggers['slope_decrease'] = True
         
         return triggers

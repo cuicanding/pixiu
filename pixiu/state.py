@@ -2,11 +2,32 @@
 
 import os
 import reflex as rx
-from typing import List, Dict
+from typing import List, Dict, TypedDict, Any
 from pathlib import Path
 import pandas as pd
 import sys
 from datetime import datetime, timedelta
+
+
+class TimelineSegment(TypedDict):
+    start: str
+    end: str
+    regime: str
+    duration: int
+
+
+class TurningPoint(TypedDict):
+    date: str
+    from_regime: str
+    to_regime: str
+    triggers: Dict[str, Any]
+
+
+class RegimeTimeline(TypedDict, total=False):
+    segments: List[TimelineSegment]
+    turning_points: List[TurningPoint]
+    current: Dict[str, Any]
+
 
 def debug_log(msg):
     """Debug logging to stdout"""
@@ -101,7 +122,7 @@ class State(rx.State):
     market_chart: str = ""
     _db_initialized: bool = False
     
-    regime_timeline: Dict = {}
+    regime_timeline: RegimeTimeline = {"segments": [], "turning_points": [], "current": {}}
     timeline_loading: bool = False
     
     explain_modal_open: bool = False

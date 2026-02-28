@@ -1,6 +1,6 @@
 """时间线择势可视化组件"""
 import reflex as rx
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, TypedDict
 
 
 REGIME_COLORS = {
@@ -14,6 +14,26 @@ REGIME_TEXT = {
     "range": "震荡",
     "unknown": "未知",
 }
+
+
+class TimelineSegment(TypedDict):
+    start: str
+    end: str
+    regime: str
+    duration: int
+
+
+class TurningPoint(TypedDict):
+    date: str
+    from_regime: str
+    to_regime: str
+    triggers: Dict[str, Any]
+
+
+class RegimeTimeline(TypedDict, total=False):
+    segments: List[TimelineSegment]
+    turning_points: List[TurningPoint]
+    current: Dict[str, Any]
 
 
 def format_timeline_text(timeline: Dict[str, Any]) -> str:
@@ -59,30 +79,39 @@ def segment_card(segment: Dict) -> rx.Component:
     """渲染单个市场阶段卡片
     
     Args:
-        segment: 包含 regime, start_date, end_date, confidence 的字典
+        segment: 包含 regime, start, end, duration 的字典
         
     Returns:
         Reflex 组件
     """
-    regime = segment.get('regime', 'unknown')
-    regime_text = REGIME_TEXT.get(regime, '未知')
-    regime_color = REGIME_COLORS.get(regime, '#6b7280')
-    regime_icon = "📈" if regime == "trend" else "📊" if regime == "range" else "❓"
-    start_date = segment.get('start_date', '?')
-    end_date = segment.get('end_date', '?')
-    confidence = segment.get('confidence', 0)
+    regime = segment['regime']
     
     return rx.box(
         rx.hstack(
-            rx.box(regime_icon, font_size="1.5rem", padding_x="0.5rem"),
+            rx.text(
+                rx.cond(regime == "trend", "📈", 
+                    rx.cond(regime == "range", "📊", "❓")
+                ),
+                font_size="1.5rem",
+                padding_x="0.5rem"
+            ),
             rx.vstack(
                 rx.hstack(
-                    rx.text(regime_text, font_weight="bold", font_size="1rem", color=regime_color),
-                    rx.text(f"{confidence:.0%}", font_size="0.75rem", color="#6b7280"),
+                    rx.text(
+                        rx.cond(regime == "trend", "趋势",
+                            rx.cond(regime == "range", "震荡", "未知")
+                        ),
+                        font_weight="bold",
+                        font_size="1rem",
+                        color=rx.cond(regime == "trend", "#10b981",
+                            rx.cond(regime == "range", "#f59e0b", "#6b7280")
+                        )
+                    ),
+                    rx.text(f"{segment['duration']}天", font_size="0.75rem", color="#6b7280"),
                     spacing="2",
                     align="center",
                 ),
-                rx.text(f"{start_date} ~ {end_date}", font_size="0.75rem", color="#a0a0b0"),
+                rx.text(f"{segment['start']} ~ {segment['end']}", font_size="0.75rem", color="#a0a0b0"),
                 spacing="1",
                 align="start",
             ),
@@ -93,7 +122,9 @@ def segment_card(segment: Dict) -> rx.Component:
         padding="0.75rem",
         border_radius="0.5rem",
         bg="#1a1a24",
-        border_left=f"4px solid {regime_color}",
+        border_left=rx.cond(regime == "trend", "4px solid #10b981",
+            rx.cond(regime == "range", "4px solid #f59e0b", "4px solid #6b7280")
+        ),
         width="100%",
     )
 
@@ -102,36 +133,59 @@ def turning_point_card(tp: Dict) -> rx.Component:
     """渲染单个转折点卡片
     
     Args:
-        tp: 包含 date, from, to, trigger 的字典
+        tp: 包含 date, from_regime, to_regime, triggers 的字典
         
     Returns:
         Reflex 组件
     """
-    date = tp.get('date', '?')
-    from_regime = tp.get('from', 'unknown')
-    to_regime = tp.get('to', 'unknown')
-    trigger = tp.get('trigger', '未知原因')
-    
-    from_text = REGIME_TEXT.get(from_regime, '未知')
-    to_text = REGIME_TEXT.get(to_regime, '未知')
-    to_color = REGIME_COLORS.get(to_regime, '#6b7280')
+    to_regime = tp['to_regime']
+    triggers = tp['triggers']
     
     return rx.box(
         rx.vstack(
             rx.hstack(
                 rx.text("⚡", font_size="1rem"),
-                rx.text(date, font_weight="bold", font_size="0.875rem"),
+                rx.text(f"{tp['date']}", font_weight="bold", font_size="0.875rem"),
                 spacing="1",
                 align="center",
             ),
             rx.hstack(
-                rx.text(from_text, color="#6b7280", font_size="0.75rem"),
+                rx.text(
+                    rx.cond(tp['from_regime'] == "trend", "趋势",
+                        rx.cond(tp['from_regime'] == "range", "震荡", "未知")
+                    ),
+                    color="#6b7280",
+                    font_size="0.75rem"
+                ),
                 rx.text("→", color="#6b7280", font_size="0.75rem"),
-                rx.text(to_text, color=to_color, font_weight="bold", font_size="0.75rem"),
+                rx.text(
+                    rx.cond(to_regime == "trend", "趋势",
+                        rx.cond(to_regime == "range", "震荡", "未知")
+                    ),
+                    color=rx.cond(to_regime == "trend", "#10b981",
+                        rx.cond(to_regime == "range", "#f59e0b", "#6b7280")
+                    ),
+                    font_weight="bold",
+                    font_size="0.75rem"
+                ),
                 spacing="1",
                 align="center",
             ),
-            rx.text(f"触发: {trigger}", font_size="0.7rem", color="#6b7280"),
+            rx.hstack(
+                rx.text("触发: ", font_size="0.7rem", color="#6b7280"),
+                rx.text(
+                    rx.cond(triggers['adx_cross_up'], "ADX突破25",
+                        rx.cond(triggers['adx_cross_down'], "ADX跌破25",
+                            rx.cond(triggers['slope_increase'], "斜率增大",
+                                rx.cond(triggers['slope_decrease'], "斜率减小", "市场结构变化")
+                            )
+                        )
+                    ),
+                    font_size="0.7rem",
+                    color="#6b7280"
+                ),
+                spacing="0",
+            ),
             spacing="1",
             align="start",
         ),
@@ -155,67 +209,37 @@ def timeline_view(timeline: Dict[str, Any]) -> rx.Component:
     Returns:
         Reflex 组件
     """
-    segments = timeline.get('segments', [])
-    turning_points = timeline.get('turning_points', [])
-    current = timeline.get('current')
-    
-    current_regime = current.get('regime', 'unknown') if current else None
-    current_badge = (
-        rx.badge(
-            REGIME_TEXT.get(current_regime, '未知'),
-            color_scheme="green" if current_regime == "trend" else "yellow",
-        ) if current else rx.box()
-    )
-    
-    segment_items = [segment_card(seg) for seg in segments]
-    tp_items = [turning_point_card(tp) for tp in turning_points]
-    
-    has_data = len(segments) > 0 or len(turning_points) > 0
-    
-    content = []
-    if segment_items:
-        content.append(
-            rx.vstack(
-                rx.text("市场阶段", font_size="0.875rem", color="#a0a0b0", font_weight="bold"),
-                *segment_items,
-                spacing="2",
-                width="100%",
-            )
-        )
-    
-    if tp_items:
-        content.append(
-            rx.vstack(
-                rx.text("转折点", font_size="0.875rem", color="#a0a0b0", font_weight="bold"),
-                *tp_items,
-                spacing="2",
-                width="100%",
-            )
-        )
-    
-    if not has_data:
-        content = [
-            rx.box(
-                rx.text("暂无时间线数据", color="#6b7280", font_size="0.875rem"),
-                padding="2rem",
-                text_align="center",
-            )
-        ]
-    
     return rx.box(
         rx.vstack(
             rx.hstack(
                 rx.text("📅 市场择势时间线", font_size="1.25rem", font_weight="bold"),
-                current_badge,
-                justify="between",
-                width="100%",
+                rx.spacer(),
             ),
             rx.divider(),
+            
+            # 市场阶段
             rx.vstack(
-                *content,
-                spacing="4",
+                rx.text("市场阶段", font_size="0.875rem", color="#a0a0b0", font_weight="bold"),
+                rx.foreach(
+                    timeline["segments"],
+                    segment_card,
+                ),
+                spacing="2",
                 width="100%",
             ),
+            
+            # 转折点
+            rx.vstack(
+                rx.text("转折点", font_size="0.875rem", color="#a0a0b0", font_weight="bold"),
+                rx.foreach(
+                    timeline["turning_points"],
+                    turning_point_card,
+                ),
+                spacing="2",
+                width="100%",
+                margin_top="1rem",
+            ),
+            
             spacing="4",
             width="100%",
         ),
