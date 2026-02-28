@@ -20,13 +20,13 @@ def step_indicator() -> rx.Component:
                 rx.hstack(
                     rx.badge(
                         str(i + 1),
-                        color_scheme="cyan" if State.current_step > i else "gray",
-                        variant="solid" if State.current_step > i else "outline",
+                        color_scheme=rx.cond(State.current_step > i, "cyan", "gray"),
+                        variant=rx.cond(State.current_step > i, "solid", "outline"),
                     ),
                     rx.text(
                         name,
                         font_size="0.75rem",
-                        color="cyan.400" if State.current_step > i else "gray.500",
+                        color=rx.cond(State.current_step > i, "cyan.400", "gray.500"),
                     ),
                     spacing="2",
                 ),
@@ -50,21 +50,21 @@ def step_market_selection() -> rx.Component:
             rx.hstack(
                 rx.button(
                     "A股",
-                    size="lg",
+                    size="3",
                     variant=rx.cond(State.current_market == "A股", "solid", "outline"),
                     color_scheme=rx.cond(State.current_market == "A股", "cyan", "gray"),
                     on_click=State.set_market_a,
                 ),
                 rx.button(
                     "港股",
-                    size="lg",
+                    size="3",
                     variant=rx.cond(State.current_market == "港股", "solid", "outline"),
                     color_scheme=rx.cond(State.current_market == "港股", "cyan", "gray"),
                     on_click=State.set_market_hk,
                 ),
                 rx.button(
                     "美股",
-                    size="lg",
+                    size="3",
                     variant=rx.cond(State.current_market == "美股", "solid", "outline"),
                     color_scheme=rx.cond(State.current_market == "美股", "cyan", "gray"),
                     on_click=State.set_market_us,
@@ -117,13 +117,13 @@ def step_stock_search() -> rx.Component:
                     value=State.search_keyword,
                     on_change=State.set_search_keyword,
                     width="100%",
-                    size="lg",
+                    size="3",
                 ),
                 rx.button(
                     "搜索",
                     on_click=State.search_stocks,
                     color_scheme="cyan",
-                    size="lg",
+                    size="3",
                     is_loading=State.is_loading,
                 ),
                 width="100%",
@@ -190,7 +190,7 @@ def step_regime_analysis() -> rx.Component:
             rx.cond(
                 State.is_loading,
                 rx.vstack(
-                    rx.spinner(size="lg"),
+                    rx.spinner(size="3"),
                     rx.text(State.loading_message),
                     align_items="center",
                     padding="2rem",
@@ -257,7 +257,7 @@ def step_regime_analysis() -> rx.Component:
                     
                     rx.cond(
                         State.using_mock_data,
-                        rx.badge("使用模拟数据", color_scheme="yellow", variant="subtle"),
+                        rx.badge("使用模拟数据", color_scheme="yellow", variant="soft"),
                     ),
                     
                     spacing="4",
@@ -286,7 +286,7 @@ def render_strategy(s: dict) -> rx.Component:
                 rx.text(name, font_weight="bold"),
                 rx.cond(
                     State.recommended_strategies.contains(name),
-                    rx.badge("推荐", color_scheme="green", size="sm"),
+                    rx.badge("推荐", color_scheme="green", size="1"),
                 ),
                 width="100%",
                 justify="between",
@@ -414,7 +414,7 @@ def step_config() -> rx.Component:
                 "开始回测",
                 on_click=State.run_backtest,
                 color_scheme="cyan",
-                size="lg",
+                size="3",
                 width="100%",
                 is_loading=State.is_loading,
             ),
@@ -445,7 +445,7 @@ def render_backtest_result(result: dict) -> rx.Component:
                 rx.spacer(),
                 rx.badge(
                     result["total_return"],
-                    color_scheme=rx.cond(result["total_return"] > 0, "green", "red"),
+                    color_scheme="gray",
                 ),
             ),
             

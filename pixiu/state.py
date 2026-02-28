@@ -24,10 +24,10 @@ class State(rx.State):
     STEP_RESULT = 6
 
     REGIME_STRATEGY_MAP = {
-        ("trend", "trend"): ["趋势强度策略", "均线策略", "动量策略"],
-        ("trend", "range"): ["网格交易策略", "RSI策略", "波动率套利策略"],
-        ("range", "trend"): ["趋势强度策略", "动量策略"],
-        ("range", "range"): ["网格交易策略", "RSI策略", "波动率套利策略", "均值回归策略"],
+        "trend_trend": ["趋势强度策略", "均线策略", "动量策略"],
+        "trend_range": ["网格交易策略", "RSI策略", "波动率套利策略"],
+        "range_trend": ["趋势强度策略", "动量策略"],
+        "range_range": ["网格交易策略", "RSI策略", "波动率套利策略", "均值回归策略"],
     }
 
     current_step: int = 1
@@ -66,12 +66,12 @@ class State(rx.State):
     ai_report: str = ""
     ai_generating: bool = False
     glm_api_key: str = ""
+    _db_initialized: bool = False
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._load_strategies()
         self._load_settings()
-        self._db_initialized = False
     
     def _load_strategies(self):
         try:
@@ -433,5 +433,5 @@ class State(rx.State):
     @rx.var
     def regime_recommendations(self) -> List[str]:
         """Get strategy recommendations based on regime analysis."""
-        key = (self.market_regime, self.stock_regime)
+        key = f"{self.market_regime}_{self.stock_regime}"
         return self.REGIME_STRATEGY_MAP.get(key, [])
