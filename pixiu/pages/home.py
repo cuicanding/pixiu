@@ -696,12 +696,28 @@ def render_backtest_result(result: dict) -> rx.Component:
             ),
             
             rx.cond(
-                State.backtest_charts.contains(result["strategy"]),
+                State.get_backtest_chart(result["strategy"]) != "",
                 rx.box(
+                    rx.text(
+                        f"{result['strategy']} 策略回测图表",
+                        font_size="sm",
+                        color="cyan.400",
+                        margin_bottom="0.5rem",
+                    ),
                     rx.image(
                         src=f"data:image/png;base64,{State.get_backtest_chart(result['strategy'])}",
                         width="100%",
                         border_radius="md",
+                    ),
+                    rx.hstack(
+                        rx.text("图表说明: ", font_size="xs", color="gray.500"),
+                        rx.text("红/绿K线=股价涨跌, ", font_size="xs", color="gray.400"),
+                        rx.text("红三角=买入, ", font_size="xs", color="red.400"),
+                        rx.text("绿三角=卖出, ", font_size="xs", color="green.400"),
+                        rx.text("蓝线=资金曲线, ", font_size="xs", color="blue.400"),
+                        rx.text("红填充=回撤", font_size="xs", color="red.300"),
+                        spacing="1",
+                        margin_top="0.5rem",
                     ),
                     margin_top="1rem",
                 ),
