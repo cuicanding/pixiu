@@ -97,7 +97,7 @@ class State(rx.State):
             db_path.parent.mkdir(parents=True, exist_ok=True)
             
             db = Database(str(db_path))
-            data_service = DataService(db)
+            data_service = DataService(db, use_mock=True)
             
             results = await data_service.search_stocks(
                 self.search_keyword,
@@ -146,7 +146,7 @@ class State(rx.State):
         
         try:
             db = Database("data/stocks.db")
-            data_service = DataService(db)
+            data_service = DataService(db, use_mock=True)
             
             self.loading_message = "加载股票数据..."
             yield
@@ -300,7 +300,7 @@ class State(rx.State):
         try:
             if self.selected_stock:
                 db = Database("data/stocks.db")
-                data_service = DataService(db)
+                data_service = DataService(db, use_mock=True)
                 df = await data_service.get_cached_data(self.selected_stock)
                 if df is not None and not df.empty:
                     detector = MarketRegimeDetector()
