@@ -12,9 +12,17 @@ def generate_backtest_chart(
     equity_curve: List[float],
     drawdown_curve: List[float]
 ) -> str:
+    df = df.copy()
+    if 'trade_date' not in df.columns:
+        if df.index.name == 'trade_date':
+            df = df.reset_index()
+        else:
+            df = df.reset_index()
+            if 'index' in df.columns:
+                df = df.rename(columns={'index': 'trade_date'})
+    
     fig = make_subplots(
-        rows=3,
-        cols=1,
+        rows=3, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.05,
         row_heights=[0.5, 0.25, 0.25],
@@ -32,8 +40,7 @@ def generate_backtest_chart(
             increasing_line_color='red',
             decreasing_line_color='green'
         ),
-        row=1,
-        col=1
+        row=1, col=1
     )
     
     buy_trades = [t for t in trades if t.signal_type == 'BUY']
@@ -50,8 +57,7 @@ def generate_backtest_chart(
                 marker=dict(symbol='triangle-up', size=12, color='red'),
                 name='买入'
             ),
-            row=1,
-            col=1
+            row=1, col=1
         )
     
     if sell_trades:
@@ -65,8 +71,7 @@ def generate_backtest_chart(
                 marker=dict(symbol='triangle-down', size=12, color='green'),
                 name='卖出'
             ),
-            row=1,
-            col=1
+            row=1, col=1
         )
     
     fig.add_trace(
@@ -74,52 +79,55 @@ def generate_backtest_chart(
             x=df['trade_date'],
             y=equity_curve,
             mode='lines',
-            name='资金曲线',
-            line=dict(color='blue', width=2)
+            name='资金',
+            line=dict(color='#3b82f6', width=2)
         ),
-        row=2,
-        col=1
+        row=2, col=1
     )
     
     fig.add_trace(
         go.Scatter(
             x=df['trade_date'],
-            y=drawdown_curve,
+            y=[d * 100 for d in drawdown_curve],
             mode='lines',
             name='回撤',
             fill='tozeroy',
-            line=dict(color='red', width=2)
+            line=dict(color='#ef4444', width=1)
         ),
-        row=3,
-        col=1
+        row=3, col=1
     )
     
     fig.update_layout(
-        template='plotly_dark',
         height=800,
         showlegend=True,
-        xaxis_rangeslider_visible=False
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=50, r=50, t=50, b=50),
     )
     
-    fig.update_xaxes(title_text='日期', row=3, col=1)
-    fig.update_yaxes(title_text='价格', row=1, col=1)
-    fig.update_yaxes(title_text='资金', row=2, col=1)
-    fig.update_yaxes(title_text='回撤率', row=3, col=1)
+    fig.update_xaxes(rangeslider_visible=False)
+    fig.update_yaxes(gridcolor='rgba(255,255,255,0.1)')
     
-    img_bytes = fig.to_image(format='png')
-    base64_str = base64.b64encode(img_bytes).decode('utf-8')
-    
-    return base64_str
+    img_bytes = fig.to_image(format="png", width=900, height=800, scale=1.5)
+    return base64.b64encode(img_bytes).decode()
 
 
 def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
     df = df.copy()
+    if 'trade_date' not in df.columns:
+        if df.index.name == 'trade_date':
+            df = df.reset_index()
+        else:
+            df = df.reset_index()
+            if 'index' in df.columns:
+                df = df.rename(columns={'index': 'trade_date'})
+    
     df['ma20'] = df['close'].rolling(window=20).mean()
     df['adx'] = _calculate_adx(df, period=14)
     
     fig = make_subplots(
-        rows=2,
-        cols=1,
+        rows=2, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.05,
         row_heights=[0.6, 0.4],
@@ -134,8 +142,7 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
             name='收盘价',
             line=dict(color='#00D4FF', width=2)
         ),
-        row=1,
-        col=1
+        row=1, col=1
     )
     
     fig.add_trace(
@@ -146,15 +153,14 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
             name='MA20',
             line=dict(color='orange', width=1.5)
         ),
-        row=1,
-        col=1
+        row=1, col=1
     )
     
     regime = analysis.get('regime', 'unknown')
     adx_value = analysis.get('adx', 0)
     
     regime_color = 'green' if regime == 'trend' else 'orange' if regime == 'range' else 'gray'
-    regime_text = f'趋势' if regime == 'trend' else f'震荡' if regime == 'range' else f'未知'
+    regime_text = '趋势' if regime == 'trend' else '震荡' if regime == 'range' else '未知'
     
     fig.add_annotation(
         x=df['trade_date'].iloc[-1],
@@ -176,33 +182,23 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
             name='ADX',
             line=dict(color='purple', width=2)
         ),
-        row=2,
-        col=1
-    )
-    
-    fig.add_hline(
-        y=25,
-        line_dash='dash',
-        line_color='red',
-        annotation_text='ADX=25',
-        row=2,
-        col=1
+        row=2, col=1
     )
     
     fig.update_layout(
         template='plotly_dark',
         height=500,
-        showlegend=True
+        showlegend=True,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
     )
     
     fig.update_xaxes(title_text='日期', row=2, col=1)
     fig.update_yaxes(title_text='价格', row=1, col=1)
     fig.update_yaxes(title_text='ADX', row=2, col=1)
     
-    img_bytes = fig.to_image(format='png')
-    base64_str = base64.b64encode(img_bytes).decode('utf-8')
-    
-    return base64_str
+    img_bytes = fig.to_image(format="png", width=800, height=500, scale=1.5)
+    return base64.b64encode(img_bytes).decode()
 
 
 def _calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -213,8 +209,8 @@ def _calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
     plus_dm = high.diff()
     minus_dm = low.diff()
     
-    plus_dm[plus_dm < 0] = 0
-    minus_dm[minus_dm > 0] = 0
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0.0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0.0)
     
     tr1 = high - low
     tr2 = abs(high - close.shift())
@@ -223,10 +219,10 @@ def _calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
     
     atr = tr.rolling(window=period).mean()
     
-    plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr)
-    minus_di = 100 * (abs(minus_dm.rolling(window=period).mean()) / atr)
+    plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr.replace(0, float('nan')))
+    minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr.replace(0, float('nan')))
     
-    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, float('nan'))
     adx = dx.rolling(window=period).mean()
     
-    return adx
+    return adx.fillna(0)
