@@ -13,6 +13,11 @@ except ImportError:
     ak = None
 
 try:
+    import baostock as bs
+except ImportError:
+    bs = None
+
+try:
     from loguru import logger
 except ImportError:
     import logging
@@ -120,11 +125,25 @@ class DataService:
         self, 
         code: str, 
         market: str = "A股",
-        start_date: str = None,
-        end_date: str = None
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> pd.DataFrame:
-        """获取股票历史数据 - 尝试真实API，失败则用mock"""
+        """获取股票历史数据 - 优先baostock，失败fallback到akshare/mock"""
         if not self.use_mock:
+            if market == "A股" and bs is not None:
+                try:
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            self._fetch_from_baostock, code, market, start_date, end_date
+                        ),
+                        timeout=30
+                    )
+                    if df is not None and not df.empty:
+                        logger.info(f"成功从Baostock获取 {code} 数据")
+                        return df
+                except Exception as e:
+                    logger.warning(f"Baostock获取失败: {e}")
+            
             try:
                 df = await asyncio.wait_for(
                     asyncio.to_thread(self._fetch_from_akshare, code, market),
@@ -181,6 +200,68 @@ class DataService:
         df['code'] = code
         df['trade_date'] = pd.to_datetime(df['trade_date'])
         return df.sort_values('trade_date')
+    
+    def _fetch_from_baostock(
+        self, 
+        code: str, 
+        market: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> pd.DataFrame:
+        """从Baostock获取数据 - 只支持A股"""
+        if bs is None:
+            raise ImportError("baostock not installed")
+        
+        if market != "A股":
+            raise ValueError(f"baostock只支持A股，不支持{market}")
+        
+        if start_date is None:
+            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        if end_date is None:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        
+        start_date_fmt = start_date.replace("-", "")
+        end_date_fmt = end_date.replace("-", "")
+        
+        if code.startswith("6"):
+            bs_code = f"sh.{code}"
+        else:
+            bs_code = f"sz.{code}"
+        
+        lg = None
+        try:
+            lg = bs.login()
+            rs = bs.query_history_k_data_plus(
+                bs_code,
+                "date,code,open,high,low,close,volume,amount",
+                start_date=start_date_fmt,
+                end_date=end_date_fmt,
+                frequency="d",
+                adjustflag="3"
+            )
+            
+            data_list = []
+            while (rs.error_code == '0') and rs.next():
+                data_list.append(rs.get_row_data())
+            
+            if not data_list:
+                logger.warning(f"baostock未获取到数据: {code}")
+                return pd.DataFrame()
+            
+            df = pd.DataFrame(data_list, columns=rs.fields)
+            df = df.rename(columns={'date': 'trade_date'})
+            df['trade_date'] = pd.to_datetime(df['trade_date'])
+            
+            for col in ['open', 'high', 'low', 'close', 'volume', 'amount']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            return df.sort_values('trade_date')
+        except Exception as e:
+            logger.error(f"baostock获取数据失败: {e}")
+            return pd.DataFrame()
+        finally:
+            if lg is not None:
+                bs.logout()
     
     def _generate_mock_history(self, code: str) -> pd.DataFrame:
         """生成模拟历史数据"""
