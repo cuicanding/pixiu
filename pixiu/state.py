@@ -103,6 +103,7 @@ class State(rx.State):
     explain_modal_open: bool = False
     current_explanation: str = ""
     ai_explaining: bool = False
+    glm_api_key: str = ""
     
     time_range_mode: str = "quick"
     quick_range: str = "12m"
