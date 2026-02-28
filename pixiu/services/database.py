@@ -105,7 +105,8 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             
-            query = "SELECT * FROM daily_quotes WHERE code = ?"
+            query = """SELECT code, trade_date, open, high, low, close, volume, amount, turnover_rate 
+                       FROM daily_quotes WHERE code = ?"""
             params = [code]
             
             if start_date:

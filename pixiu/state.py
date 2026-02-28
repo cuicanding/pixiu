@@ -4,6 +4,17 @@ import reflex as rx
 from typing import List, Dict
 from pathlib import Path
 import pandas as pd
+import sys
+
+def debug_log(msg):
+    """Debug logging to stdout"""
+    print(f"[DEBUG] {msg}", file=sys.stderr, flush=True)
+
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
 
 from pixiu.services.database import Database
 from pixiu.services.data_service import DataService
@@ -180,6 +191,7 @@ class State(rx.State):
             yield
     
     async def select_stock(self, code: str):
+        debug_log(f"[选择股票] 用户选择: {code}")
         self.selected_stock = code
         self.selected_stock_name = ""
         for stock in self.search_results:
@@ -189,6 +201,7 @@ class State(rx.State):
         if self.selected_stock_name:
             self.current_step = self.STEP_REGIME
             self.max_step = max(self.max_step, self.STEP_REGIME)
+            debug_log(f"[选择股票] 完成: {code} - {self.selected_stock_name}, 跳转到步骤 {self.current_step}")
         yield
     
     def toggle_strategy(self, strategy_name: str):
@@ -198,9 +211,12 @@ class State(rx.State):
             self.selected_strategies = self.selected_strategies + [strategy_name]
     
     async def run_backtest(self):
+        debug_log(f"[回测] 开始执行, 股票: {self.selected_stock}, 策略: {self.selected_strategies}")
+        
         await self._ensure_db_initialized()
         if not self.selected_stock or not self.selected_strategies:
             self.error_message = "请先选择股票和策略"
+            debug_log(f"[回测] 参数不足: stock={self.selected_stock}, strategies={self.selected_strategies}")
             yield
             return
         
@@ -212,14 +228,16 @@ class State(rx.State):
         
         try:
             db = Database("data/stocks.db")
-            data_service = DataService(db, use_mock=True)  # 使用mock避免网络问题
+            data_service = DataService(db, use_mock=True)
             
             self.loading_message = "加载股票数据..."
             yield
             
+            debug_log(f"[回测] 获取股票数据: {self.selected_stock}")
             df = await data_service.get_cached_data(self.selected_stock)
             
             if df is None or (hasattr(df, 'empty') and df.empty):
+                debug_log("[回测] 缓存无数据，尝试下载...")
                 success, _ = await data_service.download_and_save(
                     self.selected_stock,
                     self.current_market
@@ -230,8 +248,11 @@ class State(rx.State):
             if df is None or (hasattr(df, 'empty') and df.empty):
                 self.error_message = "无法获取股票数据"
                 self.is_loading = False
+                debug_log("[回测] 无法获取股票数据")
                 yield
                 return
+            
+            debug_log(f"[回测] 数据加载成功: {len(df)} 条")
             
             backtest_config = BacktestConfig(
                 initial_capital=self.initial_capital,
@@ -247,13 +268,17 @@ class State(rx.State):
                 self.progress = int((i / total) * 80) if total > 0 else 0
                 yield
                 
+                debug_log(f"[回测] 执行策略 {i+1}/{total}: {strategy_name}")
                 strategy = get_strategy(strategy_name)
                 if strategy is None:
+                    debug_log(f"[回测] 策略不存在: {strategy_name}")
                     continue
                 
                 engine = BacktestEngine(backtest_config)
                 df_with_signals = strategy.generate_signals(df)
                 result = engine.run(df_with_signals, df_with_signals['signal'])
+                
+                debug_log(f"[回测] 策略 {strategy_name} 完成: 收益={result.total_return:.2f}%, 夏普={result.sharpe_ratio:.2f}")
                 
                 trades = []
                 for t in result.trades[:50]:
@@ -279,10 +304,14 @@ class State(rx.State):
             self.loading_message = "回测完成"
             self.current_step = self.STEP_RESULT
             self.max_step = max(self.max_step, self.STEP_RESULT)
+            debug_log(f"[回测] 全部完成，跳转到步骤 {self.current_step}, 结果数: {len(self.backtest_results)}")
             yield
             
         except Exception as e:
             self.error_message = f"回测失败: {str(e)}"
+            debug_log(f"[回测] 失败: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.is_loading = False
             self.loading_message = ""
@@ -378,6 +407,8 @@ class State(rx.State):
         from pixiu.analysis import MarketRegimeDetector
         from pixiu.services.data_service import DataService
         
+        debug_log(f"[择势分析] 开始执行, 股票: {self.selected_stock}, 市场: {self.current_market}")
+        
         self.is_loading = True
         self.loading_message = "分析市场和个股状态..."
         self.error_message = ""
@@ -385,49 +416,59 @@ class State(rx.State):
         
         try:
             await self._ensure_db_initialized()
+            debug_log("[择势分析] 数据库初始化完成")
             
             db = Database("data/stocks.db")
-            data_service = DataService(db, use_mock=True)  # 使用mock避免网络问题
+            data_service = DataService(db, use_mock=True)
             detector = MarketRegimeDetector()
             
-            # Analyze market index (use mock for stability)
+            debug_log("[择势分析] 生成大盘模拟数据...")
             market_df = data_service._generate_mock_history("index_" + self.current_market)
             if market_df is not None and not market_df.empty:
                 market_analysis = detector.get_analysis_detail(market_df)
                 self.market_regime = market_analysis["regime"]
                 self.market_index_data = market_analysis
                 self.using_mock_data = True
+                debug_log(f"[择势分析] 大盘状态: {self.market_regime}, ADX: {market_analysis.get('adx')}")
             
-            # Analyze selected stock
+            debug_log(f"[择势分析] 分析个股: {self.selected_stock}")
             if self.selected_stock:
                 df = await data_service.get_cached_data(self.selected_stock)
+                debug_log(f"[择势分析] 缓存数据: {len(df) if df is not None and not df.empty else 0} 条")
                 if df is None or df.empty:
+                    debug_log("[择势分析] 尝试下载股票数据...")
                     success, _ = await data_service.download_and_save(
                         self.selected_stock,
                         self.current_market
                     )
                     if success:
                         df = await data_service.get_cached_data(self.selected_stock)
+                        debug_log(f"[择势分析] 下载后缓存数据: {len(df) if df is not None and not df.empty else 0} 条")
                 
                 if df is not None and not df.empty:
                     stock_analysis = detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
+                    debug_log(f"[择势分析] 个股状态: {self.stock_regime}, ADX: {stock_analysis.get('adx')}")
                 else:
-                    # Fallback: use mock data
+                    debug_log("[择势分析] 无缓存数据，使用模拟数据")
                     df = data_service._generate_mock_history(self.selected_stock)
                     stock_analysis = detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
                     self.using_mock_data = True
+                    debug_log(f"[择势分析] 个股状态(模拟): {self.stock_regime}")
 
             self.recommended_strategies = self.regime_recommendations
+            debug_log(f"[择势分析] 推荐策略: {self.recommended_strategies}")
 
             self.current_step = self.STEP_STRATEGY
             self.max_step = max(self.max_step, self.STEP_STRATEGY)
+            debug_log(f"[择势分析] 完成，跳转到步骤 {self.current_step}")
             
         except Exception as e:
             self.error_message = f"择势分析失败: {str(e)}"
+            debug_log(f"[择势分析] 失败: {e}")
             import traceback
             traceback.print_exc()
         finally:
