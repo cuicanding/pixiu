@@ -15,6 +15,7 @@
 ### Task 1.1: Create Theme Configuration
 
 **Files:**
+
 - Create: `pixiu/theme.py`
 
 **Step 1: Create theme module with dark color palette**
@@ -59,6 +60,7 @@ git commit -m "feat: add dark tech theme configuration"
 ### Task 1.2: Create Metric Card Component
 
 **Files:**
+
 - Create: `pixiu/components/__init__.py`
 - Create: `pixiu/components/metric_card.py`
 
@@ -88,7 +90,7 @@ def metric_card(
     color: str = "cyan",
 ) -> rx.Component:
     """Display a metric with title and value.
-    
+
     Args:
         title: Metric label
         value: Metric value to display
@@ -102,7 +104,7 @@ def metric_card(
         "orange": "#f59e0b",
         "purple": "#7c3aed",
     }
-    
+
     return rx.box(
         rx.vstack(
             rx.text(
@@ -147,6 +149,7 @@ git commit -m "feat: add metric card component"
 ### Task 1.3: Create Stock Card Component
 
 **Files:**
+
 - Create: `pixiu/components/stock_card.py`
 - Modify: `pixiu/components/__init__.py`
 
@@ -160,7 +163,7 @@ import reflex as rx
 
 def stock_card(stock: dict, on_click_handler) -> rx.Component:
     """Display a stock search result.
-    
+
     Args:
         stock: Dict with 'code' and 'name' keys
         on_click_handler: Event handler for selection
@@ -218,6 +221,7 @@ git commit -m "feat: add stock card component"
 ### Task 1.4: Create Strategy Card Component
 
 **Files:**
+
 - Create: `pixiu/components/strategy_card.py`
 - Modify: `pixiu/components/__init__.py`
 
@@ -235,7 +239,7 @@ def strategy_card(
     on_click_handler,
 ) -> rx.Component:
     """Display a selectable strategy card.
-    
+
     Args:
         strategy: Dict with 'name' and 'description' keys
         is_selected: Whether this strategy is selected
@@ -303,6 +307,7 @@ git commit -m "feat: add strategy card component"
 ### Task 2.1: Rewrite State Class with Real Service Integration
 
 **Files:**
+
 - Modify: `pixiu/state.py` (complete rewrite)
 
 **Step 1: Write new state class with real service calls**
@@ -325,47 +330,47 @@ from pixiu.config import config
 
 class State(rx.State):
     """Application global state with real service integration."""
-    
+
     # UI State
     is_loading: bool = False
     loading_message: str = ""
     progress: int = 0
     error_message: str = ""
-    
+
     # Market & Search
     current_market: str = "A股"
     search_keyword: str = ""
     search_results: List[Dict] = []
-    
+
     # Stock Selection
     selected_stock: str = ""
     selected_stock_name: str = ""
     stock_info: Dict = {}
-    
+
     # Strategy Selection
     available_strategies: List[Dict] = []
     selected_strategies: List[str] = []
-    
+
     # Backtest Configuration
     initial_capital: float = 100000.0
     commission_rate: float = 0.0003
     position_size: float = 0.95
-    
+
     # Backtest Results
     backtest_results: List[Dict] = []
-    
+
     # AI Report
     ai_report: str = ""
     ai_generating: bool = False
-    
+
     # Settings
     glm_api_key: str = ""
-    
+
     def __init__(self):
         super().__init__()
         self._load_strategies()
         self._load_settings()
-    
+
     def _load_strategies(self):
         """Load available strategies from registry."""
         strategies = get_all_strategies()
@@ -376,50 +381,50 @@ class State(rx.State):
             }
             for s in strategies
         ]
-    
+
     def _load_settings(self):
         """Load settings from config."""
         self.glm_api_key = config.glm_api_key or ""
         self.initial_capital = config.initial_capital
         self.commission_rate = config.commission_rate
         self.position_size = config.position_size
-    
+
     # Market Selection
     def set_market_a(self):
         self.current_market = "A股"
-    
+
     def set_market_hk(self):
         self.current_market = "港股"
-    
+
     def set_market_us(self):
         self.current_market = "美股"
-    
+
     # Search
     def set_search_keyword(self, keyword: str):
         self.search_keyword = keyword
-    
+
     async def search_stocks(self):
         """Search stocks using real DataService."""
         if not self.search_keyword:
             return
-        
+
         self.is_loading = True
         self.error_message = ""
         self.search_results = []
         yield
-        
+
         try:
             db_path = Path("data/stocks.db")
             db_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             db = Database(str(db_path))
             data_service = DataService(db)
-            
+
             results = await data_service.search_stocks(
                 self.search_keyword,
                 self.current_market
             )
-            
+
             self.search_results = [
                 {"code": s.code, "name": s.name, "market": s.market}
                 for s in results[:10]
@@ -429,20 +434,20 @@ class State(rx.State):
         finally:
             self.is_loading = False
             yield
-    
+
     # Stock Selection
     async def select_stock(self, code: str):
         """Select a stock and load its data."""
         self.selected_stock = code
         self.selected_stock_name = ""
-        
+
         for stock in self.search_results:
             if stock["code"] == code:
                 self.selected_stock_name = stock["name"]
                 break
-        
+
         yield
-    
+
     # Strategy Selection
     def toggle_strategy(self, strategy_name: str):
         """Toggle strategy selection."""
@@ -450,7 +455,7 @@ class State(rx.State):
             self.selected_strategies.remove(strategy_name)
         else:
             self.selected_strategies.append(strategy_name)
-    
+
     # Backtest
     async def run_backtest(self):
         """Run backtest using real BacktestEngine."""
@@ -458,22 +463,22 @@ class State(rx.State):
             self.error_message = "请先选择股票和策略"
             yield
             return
-        
+
         self.is_loading = True
         self.progress = 0
         self.error_message = ""
         self.backtest_results = []
         yield
-        
+
         try:
             db = Database("data/stocks.db")
             data_service = DataService(db)
-            
+
             self.loading_message = "加载股票数据..."
             yield
-            
+
             df = await data_service.get_cached_data(self.selected_stock)
-            
+
             if df.empty:
                 success, _ = await data_service.download_and_save(
                     self.selected_stock,
@@ -481,30 +486,30 @@ class State(rx.State):
                 )
                 if success:
                     df = await data_service.get_cached_data(self.selected_stock)
-            
+
             if df.empty:
                 self.error_message = "无法获取股票数据"
                 self.is_loading = False
                 yield
                 return
-            
+
             from pixiu.strategies import get_strategy
-            
+
             backtest_config = BacktestConfig(
                 initial_capital=self.initial_capital,
                 commission_rate=self.commission_rate,
                 position_size=self.position_size,
             )
-            
+
             for i, strategy_name in enumerate(self.selected_strategies):
                 self.loading_message = f"回测策略: {strategy_name}"
                 self.progress = int((i / len(self.selected_strategies)) * 80)
                 yield
-                
+
                 strategy = get_strategy(strategy_name)
                 engine = BacktestEngine(backtest_config)
                 result = engine.run(df, strategy)
-                
+
                 self.backtest_results.append({
                     "strategy": strategy_name,
                     "total_return": result.total_return,
@@ -524,19 +529,19 @@ class State(rx.State):
                         for t in result.trades[:50]
                     ],
                 })
-            
+
             self.progress = 100
             yield
-            
+
             return rx.redirect("/backtest")
-            
+
         except Exception as e:
             self.error_message = f"回测失败: {str(e)}"
         finally:
             self.is_loading = False
             self.loading_message = ""
             yield
-    
+
     # AI Report
     async def generate_ai_report(self):
         """Generate AI analysis report."""
@@ -544,16 +549,16 @@ class State(rx.State):
             self.error_message = "请先在设置中配置 GLM API Key"
             yield
             return
-        
+
         if not self.backtest_results:
             self.error_message = "请先执行回测"
             yield
             return
-        
+
         self.ai_generating = True
         self.ai_report = ""
         yield
-        
+
         try:
             ai_service = AIService(self.glm_api_key)
             self.ai_report = await ai_service.generate_analysis_report(
@@ -567,29 +572,29 @@ class State(rx.State):
         finally:
             self.ai_generating = False
             yield
-    
+
     # Settings
     def set_glm_api_key(self, key: str):
         self.glm_api_key = key
-    
+
     def set_initial_capital(self, value: str):
         try:
             self.initial_capital = float(value)
         except ValueError:
             pass
-    
+
     def set_commission_rate(self, value: str):
         try:
             self.commission_rate = float(value)
         except ValueError:
             pass
-    
+
     def set_position_size(self, value: str):
         try:
             self.position_size = float(value)
         except ValueError:
             pass
-    
+
     def save_settings(self):
         """Save settings to config and environment."""
         import os
@@ -598,7 +603,7 @@ class State(rx.State):
         config.initial_capital = self.initial_capital
         config.commission_rate = self.commission_rate
         config.position_size = self.position_size
-    
+
     def clear_error(self):
         """Clear error message."""
         self.error_message = ""
@@ -618,6 +623,7 @@ git commit -m "feat: wire state management to real backend services"
 ### Task 3.1: Redesign Home Page
 
 **Files:**
+
 - Modify: `pixiu/pages/home.py` (complete rewrite)
 
 **Step 1: Create new home page with 4-step flow**
@@ -637,28 +643,28 @@ def page() -> rx.Component:
         rx.vstack(
             # Header
             _header(),
-            
+
             # Step 1: Select Market & Search
             _step_1_search(),
-            
+
             # Step 2: Select Stock
             rx.cond(
                 State.search_results.length() > 0,
                 _step_2_select_stock(),
             ),
-            
+
             # Step 3: Select Strategy
             rx.cond(
                 State.selected_stock != "",
                 _step_3_select_strategy(),
             ),
-            
+
             # Step 4: Configure & Run
             rx.cond(
                 State.selected_strategies.length() > 0,
                 _step_4_run(),
             ),
-            
+
             # Error Display
             rx.cond(
                 State.error_message != "",
@@ -681,7 +687,7 @@ def page() -> rx.Component:
                     margin_top="1rem",
                 ),
             ),
-            
+
             # Loading Overlay
             rx.cond(
                 State.is_loading,
@@ -711,7 +717,7 @@ def page() -> rx.Component:
                     z_index=1000,
                 ),
             ),
-            
+
             spacing="1.5rem",
             width="100%",
             max_width="900px",
@@ -999,6 +1005,7 @@ git commit -m "feat: redesign home page with 4-step flow and dark theme"
 ### Task 3.2: Redesign Backtest Results Page
 
 **Files:**
+
 - Modify: `pixiu/pages/backtest.py` (complete rewrite)
 
 **Step 1: Create new backtest results page**
@@ -1035,9 +1042,9 @@ def page() -> rx.Component:
                 rx.badge("回测报告", color_scheme="cyan"),
                 width="100%",
             ),
-            
+
             rx.divider(border_color="#2a2a3a"),
-            
+
             # No results message
             rx.cond(
                 State.backtest_results.length() == 0,
@@ -1049,7 +1056,7 @@ def page() -> rx.Component:
                     padding="4rem",
                     text_align="center",
                 ),
-                
+
                 # Results display
                 rx.vstack(
                     # Metrics for each strategy
@@ -1057,17 +1064,17 @@ def page() -> rx.Component:
                         State.backtest_results,
                         _strategy_result,
                     ),
-                    
+
                     rx.divider(border_color="#2a2a3a"),
-                    
+
                     # AI Report Section
                     _ai_report_section(),
-                    
+
                     spacing="1.5rem",
                     width="100%",
                 ),
             ),
-            
+
             spacing="1.5rem",
             width="100%",
             max_width="1200px",
@@ -1083,7 +1090,7 @@ def _strategy_result(result: dict) -> rx.Component:
     """Display results for a single strategy."""
     total_return = result.get("total_return", 0)
     sharpe = result.get("sharpe_ratio", 0)
-    
+
     return rx.box(
         rx.vstack(
             rx.text(
@@ -1092,7 +1099,7 @@ def _strategy_result(result: dict) -> rx.Component:
                 font_weight="bold",
                 color="#ffffff",
             ),
-            
+
             # Metrics Grid
             rx.grid(
                 metric_card(
@@ -1128,7 +1135,7 @@ def _strategy_result(result: dict) -> rx.Component:
                 columns="6",
                 spacing="0.75rem",
             ),
-            
+
             # Trade History
             rx.box(
                 rx.text(
@@ -1148,7 +1155,7 @@ def _strategy_result(result: dict) -> rx.Component:
                 ),
                 width="100%",
             ),
-            
+
             spacing="1rem",
             align_items="flex-start",
         ),
@@ -1164,7 +1171,7 @@ def _trade_row(trade: dict) -> rx.Component:
     """Display a single trade."""
     is_buy = trade.get("type") == "buy"
     pnl = trade.get("pnl", 0)
-    
+
     return rx.hstack(
         rx.text(trade.get("date", ""), color="#a0a0b0", min_width="80px"),
         rx.badge(
@@ -1210,7 +1217,7 @@ def _ai_report_section() -> rx.Component:
             ),
             width="100%",
         ),
-        
+
         rx.cond(
             State.ai_report != "",
             rx.box(
@@ -1245,7 +1252,7 @@ def _ai_report_section() -> rx.Component:
                 ),
             ),
         ),
-        
+
         width="100%",
     )
 ```
@@ -1262,6 +1269,7 @@ git commit -m "feat: redesign backtest page with metrics display and AI report"
 ### Task 3.3: Redesign Settings Page
 
 **Files:**
+
 - Modify: `pixiu/pages/settings.py` (complete rewrite)
 
 **Step 1: Create new settings page**
@@ -1296,9 +1304,9 @@ def page() -> rx.Component:
                 rx.spacer(),
                 width="100%",
             ),
-            
+
             rx.divider(border_color="#2a2a3a"),
-            
+
             # API Configuration
             _section(
                 "🔑 API 配置",
@@ -1322,7 +1330,7 @@ def page() -> rx.Component:
                     width="100%",
                 ),
             ),
-            
+
             # Backtest Parameters
             _section(
                 "💰 回测参数",
@@ -1349,7 +1357,7 @@ def page() -> rx.Component:
                     spacing="1rem",
                 ),
             ),
-            
+
             # Save Button
             rx.button(
                 "保存设置",
@@ -1358,9 +1366,9 @@ def page() -> rx.Component:
                 size="lg",
                 margin_top="1rem",
             ),
-            
+
             rx.spacer(),
-            
+
             spacing="1.5rem",
             width="100%",
             max_width="600px",
@@ -1421,6 +1429,7 @@ git commit -m "feat: redesign settings page with clean dark layout"
 ### Task 4.1: Update App Entry Point
 
 **Files:**
+
 - Modify: `pixiu/pixiu.py`
 
 **Step 1: Update app with theme**
@@ -1472,6 +1481,7 @@ reflex run
 ```
 
 **Step 3: Verify each function**
+
 - [ ] Home page loads with dark theme
 - [ ] Market selection works (A股/港股/美股)
 - [ ] Stock search returns real results from akshare

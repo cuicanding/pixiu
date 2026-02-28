@@ -412,11 +412,57 @@ def step_regime_analysis() -> rx.Component:
                     
                     rx.cond(
                         State.regime_chart != "",
-                        rx.image(
-                            src=f"data:image/png;base64,{State.regime_chart}",
+                        rx.box(
+                            rx.text(
+                                f"{State.selected_stock_name} ({State.selected_stock}) 价格走势图",
+                                font_size="sm",
+                                color="cyan.400",
+                                margin_bottom="0.5rem",
+                            ),
+                            rx.image(
+                                src=f"data:image/png;base64,{State.regime_chart}",
+                                width="100%",
+                                border_radius="md",
+                            ),
+                            rx.hstack(
+                                rx.text("上图显示: ", font_size="xs", color="gray.500"),
+                                rx.text("蓝色线=收盘价, ", font_size="xs", color="#00D4FF"),
+                                rx.text("橙色虚线=20日均线, ", font_size="xs", color="orange"),
+                                rx.text("紫色线=ADX指标(>25表示趋势)", font_size="xs", color="#a855f7"),
+                                spacing="1",
+                                margin_top="0.5rem",
+                            ),
                             width="100%",
-                            border_radius="md",
                         ),
+                    ),
+                    
+                    rx.cond(
+                        State.recommended_strategies.length() > 0,
+                        rx.box(
+                            rx.hstack(
+                                rx.icon("lightbulb", color="yellow.400"),
+                                rx.text("推荐策略: ", font_weight="bold", color="yellow.400"),
+                                rx.foreach(
+                                    State.recommended_strategies,
+                                    lambda s: rx.badge(s, color_scheme="yellow", variant="soft")
+                                ),
+                            ),
+                            padding="1rem",
+                            bg="gray.800",
+                            border_radius="md",
+                            margin_top="1rem",
+                        ),
+                    ),
+                    
+                    rx.hstack(
+                        rx.spacer(),
+                        rx.button(
+                            "下一步：选择策略",
+                            on_click=State.go_to_strategy_step,
+                            color_scheme="cyan",
+                            size="3",
+                        ),
+                        margin_top="1rem",
                     ),
                     
                     spacing="4",

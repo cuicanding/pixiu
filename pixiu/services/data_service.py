@@ -68,7 +68,19 @@ MOCK_STOCKS = {
         Stock(code="BABA", name="阿里巴巴", market="美股"),
         Stock(code="JD", name="京东", market="美股"),
         Stock(code="PDD", name="拼多多", market="美股"),
-    ]
+    ],
+    "科创板": [
+        Stock(code="688981", name="中芯国际", market="A股"),
+        Stock(code="688599", name="天合光能", market="A股"),
+        Stock(code="688012", name="中微公司", market="A股"),
+        Stock(code="688111", name="金山办公", market="A股"),
+        Stock(code="688223", name="晶科能源", market="A股"),
+        Stock(code="688256", name="寒武纪", market="A股"),
+        Stock(code="688369", name="致远互联", market="A股"),
+        Stock(code="688396", name="华润微", market="A股"),
+        Stock(code="688567", name="孚能科技", market="A股"),
+        Stock(code="688588", name="凌志软件", market="A股"),
+    ],
 }
 
 
@@ -83,11 +95,20 @@ class DataService:
         """搜索股票"""
         keyword_upper = keyword.upper()
         
-        # 先从模拟数据中搜索
-        mock_results = [
-            s for s in MOCK_STOCKS.get(market, [])
-            if keyword_upper in s.code.upper() or keyword in s.name
-        ]
+        # 从模拟数据中搜索（包括A股和科创板）
+        mock_results = []
+        if market == "A股":
+            # 搜索A股和科创板
+            for mkt in ["A股", "科创板"]:
+                mock_results.extend([
+                    s for s in MOCK_STOCKS.get(mkt, [])
+                    if keyword_upper in s.code.upper() or keyword in s.name
+                ])
+        else:
+            mock_results = [
+                s for s in MOCK_STOCKS.get(market, [])
+                if keyword_upper in s.code.upper() or keyword in s.name
+            ]
         
         if self.use_mock:
             logger.info(f"使用模拟数据搜索: {keyword}, 找到 {len(mock_results)} 条")
@@ -101,10 +122,16 @@ class DataService:
                     timeout=15
                 )
                 filtered = df[df['名称'].str.contains(keyword, na=False)]
-                return [
+                ak_results = [
                     Stock(code=str(row['代码']), name=str(row['名称']), market="A股")
                     for _, row in filtered.head(20).iterrows()
                 ]
+                # 合并akshare结果和科创板mock结果
+                kcb_results = [
+                    s for s in MOCK_STOCKS.get("科创板", [])
+                    if keyword_upper in s.code.upper() or keyword in s.name
+                ]
+                return (ak_results + kcb_results)[:20]
             elif market == "港股":
                 df = await asyncio.wait_for(
                     asyncio.to_thread(ak.stock_hk_spot_em),

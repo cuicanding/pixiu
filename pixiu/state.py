@@ -560,10 +560,7 @@ class State(rx.State):
 
             self.recommended_strategies = self.regime_recommendations
             debug_log(f"[择势分析] 推荐策略: {self.recommended_strategies}")
-
-            self.current_step = self.STEP_STRATEGY
-            self.max_step = max(self.max_step, self.STEP_STRATEGY)
-            debug_log(f"[择势分析] 完成，跳转到步骤 {self.current_step}")
+            debug_log(f"[择势分析] 完成，停留在择势分析步骤查看结果")
             
         except Exception as e:
             self.error_message = f"择势分析失败: {str(e)}"
@@ -578,6 +575,11 @@ class State(rx.State):
     def set_combine_mode(self, mode: str):
         if mode in ["equal_weight", "signal_filter", "complementary"]:
             self.combine_mode = mode
+
+    def go_to_strategy_step(self):
+        """跳转到策略选择步骤"""
+        self.current_step = self.STEP_STRATEGY
+        self.max_step = max(self.max_step, self.STEP_STRATEGY)
 
     @rx.var
     def backtest_results_empty(self) -> bool:

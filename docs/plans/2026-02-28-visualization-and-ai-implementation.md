@@ -13,6 +13,7 @@
 ## Task 1: 添加时间范围选择状态
 
 **Files:**
+
 - Modify: `pixiu/state.py`
 - Test: `tests/test_state_time_range.py`
 
@@ -51,6 +52,7 @@ def test_set_year_range_this_year():
 ```bash
 pytest tests/test_state_time_range.py -v
 ```
+
 Expected: FAIL (属性不存在)
 
 **Step 3: 添加时间范围字段到State**
@@ -60,7 +62,7 @@ Expected: FAIL (属性不存在)
 ```python
 class State(rx.State):
     # ... 现有字段 ...
-    
+
     # 时间范围相关
     time_range_mode: str = "quick"
     quick_range: str = "12m"
@@ -69,37 +71,37 @@ class State(rx.State):
     custom_end_date: str = ""
     backtest_start_date: str = ""
     backtest_end_date: str = ""
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._load_strategies()
         self._load_settings()
         self._update_date_range()
-    
+
     def set_quick_range(self, range_key: str):
         self.time_range_mode = "quick"
         self.quick_range = range_key
         self._update_date_range()
-    
+
     def set_year_range(self, year_key: str):
         self.time_range_mode = "year"
         self.year_range = year_key
         self._update_date_range()
-    
+
     def set_custom_start(self, date: str):
         self.time_range_mode = "custom"
         self.custom_start_date = date
         self._update_date_range()
-    
+
     def set_custom_end(self, date: str):
         self.time_range_mode = "custom"
         self.custom_end_date = date
         self._update_date_range()
-    
+
     def _update_date_range(self):
         from datetime import datetime, timedelta
         today = datetime.now()
-        
+
         if self.time_range_mode == "quick":
             if self.quick_range == "3m":
                 start = today - timedelta(days=90)
@@ -135,7 +137,7 @@ class State(rx.State):
             except:
                 start = today - timedelta(days=365)
                 end = today
-        
+
         self.backtest_start_date = start.strftime("%Y-%m-%d")
         self.backtest_end_date = end.strftime("%Y-%m-%d")
 ```
@@ -145,6 +147,7 @@ class State(rx.State):
 ```bash
 pytest tests/test_state_time_range.py -v
 ```
+
 Expected: PASS
 
 **Step 5: 提交**
@@ -159,6 +162,7 @@ git commit -m "feat(state): add time range selection fields and methods"
 ## Task 2: 更新股票搜索页面添加时间范围选择UI
 
 **Files:**
+
 - Modify: `pixiu/pages/home.py`
 - Test: 手动测试UI
 
@@ -172,7 +176,7 @@ def step_stock_search() -> rx.Component:
         rx.vstack(
             rx.text("搜索股票", font_size="lg", font_weight="bold"),
             rx.text(f"当前市场: {State.current_market}", font_size="sm", color="gray.400"),
-            
+
             rx.hstack(
                 rx.input(
                     placeholder="输入股票代码或名称...",
@@ -191,17 +195,17 @@ def step_stock_search() -> rx.Component:
                 width="100%",
                 spacing="2",
             ),
-            
+
             rx.cond(State.is_loading, rx.hstack(rx.spinner(), rx.text(State.loading_message))),
             rx.cond(State.error_message != "", rx.text(State.error_message, color="red.400")),
-            
+
             rx.box(
                 rx.foreach(State.search_results, render_search_result),
                 max_height="200px",
                 overflow_y="auto",
                 width="100%",
             ),
-            
+
             rx.cond(
                 State.selected_stock != "",
                 rx.box(
@@ -215,11 +219,11 @@ def step_stock_search() -> rx.Component:
                     border_radius="md",
                 ),
             ),
-            
+
             rx.divider(margin_y="1rem"),
-            
+
             rx.text("回测时间范围", font_size="lg", font_weight="bold"),
-            
+
             rx.text("快捷选项:", font_size="sm", color="gray.400"),
             rx.hstack(
                 rx.button("近3个月", size="2", variant=rx.cond(State.quick_range == "3m", "solid", "outline"), color_scheme="cyan", on_click=State.set_quick_range("3m")),
@@ -229,7 +233,7 @@ def step_stock_search() -> rx.Component:
                 spacing="2",
                 flex_wrap="wrap",
             ),
-            
+
             rx.text("年度选项:", font_size="sm", color="gray.400", margin_top="0.5rem"),
             rx.hstack(
                 rx.button("今年", size="2", variant=rx.cond(State.year_range == "this_year", "solid", "outline"), color_scheme="cyan", on_click=State.set_year_range("this_year")),
@@ -239,7 +243,7 @@ def step_stock_search() -> rx.Component:
                 spacing="2",
                 flex_wrap="wrap",
             ),
-            
+
             rx.text("自定义:", font_size="sm", color="gray.400", margin_top="0.5rem"),
             rx.hstack(
                 rx.text("开始:", font_size="sm"),
@@ -249,7 +253,7 @@ def step_stock_search() -> rx.Component:
                 spacing="2",
                 align_items="center",
             ),
-            
+
             rx.box(
                 rx.hstack(
                     rx.text("当前时间范围:", color="gray.400"),
@@ -262,7 +266,7 @@ def step_stock_search() -> rx.Component:
                 border_radius="md",
                 margin_top="1rem",
             ),
-            
+
             spacing="3",
         ),
         padding="1.5rem",
@@ -277,6 +281,7 @@ def step_stock_search() -> rx.Component:
 ```bash
 reflex run
 ```
+
 访问 http://localhost:3000，选择市场后进入股票搜索页面，验证时间范围选择UI正常显示和工作。
 
 **Step 3: 提交**
@@ -291,6 +296,7 @@ git commit -m "feat(ui): add time range selection to stock search page"
 ## Task 3: 添加baostock数据源支持
 
 **Files:**
+
 - Modify: `pixiu/services/data_service.py`
 - Test: `tests/test_baostock.py`
 
@@ -330,6 +336,7 @@ def test_fetch_from_baostock_with_none_dates(data_service):
 ```bash
 pytest tests/test_baostock.py -v
 ```
+
 Expected: FAIL (方法不存在)
 
 **Step 3: 实现baostock数据获取方法**
@@ -349,22 +356,22 @@ def _fetch_from_baostock(
         import baostock as bs
     except ImportError:
         raise ImportError("baostock not installed, run: pip install baostock")
-    
+
     lg = bs.login()
     if lg.error_code != '0':
         raise Exception(f"baostock login failed: {lg.error_msg}")
-    
+
     if not end_date:
         end_date = datetime.now().strftime("%Y-%m-%d")
     if not start_date:
         start_date = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
-    
+
     if market == "A股":
         bs_code = f"sh{code}" if code.startswith("6") else f"sz{code}"
     else:
         bs.logout()
         raise Exception(f"baostock only supports A股, got {market}")
-    
+
     rs = bs.query_history_k_data_plus(
         bs_code,
         "date,code,open,high,low,close,volume,amount",
@@ -373,23 +380,23 @@ def _fetch_from_baostock(
         frequency="d",
         adjustflag="3"
     )
-    
+
     data_list = []
     while rs.next():
         data_list.append(rs.get_row_data())
-    
+
     bs.logout()
-    
+
     if not data_list:
         return pd.DataFrame()
-    
+
     df = pd.DataFrame(data_list, columns=rs.fields)
     df = df.rename(columns={'date': 'trade_date'})
     df['trade_date'] = pd.to_datetime(df['trade_date'])
-    
+
     for col in ['open', 'high', 'low', 'close', 'volume', 'amount']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-    
+
     return df.sort_values('trade_date').reset_index(drop=True)
 ```
 
@@ -420,7 +427,7 @@ async def fetch_stock_history(
                 return df
         except Exception as e:
             logger.warning(f"Baostock获取失败: {e}")
-        
+
         try:
             df = await asyncio.wait_for(
                 asyncio.to_thread(self._fetch_from_akshare, code, market),
@@ -431,7 +438,7 @@ async def fetch_stock_history(
                 return df
         except Exception as e:
             logger.warning(f"AKShare获取失败: {e}，使用模拟数据")
-            
+
     return self._generate_mock_history(code)
 ```
 
@@ -440,6 +447,7 @@ async def fetch_stock_history(
 ```bash
 pytest tests/test_baostock.py -v
 ```
+
 Expected: PASS
 
 **Step 6: 提交**
@@ -454,6 +462,7 @@ git commit -m "feat(data): add baostock data source support with time range"
 ## Task 4: 创建图表服务
 
 **Files:**
+
 - Create: `pixiu/services/chart_service.py`
 - Test: `tests/test_chart_service.py`
 
@@ -487,7 +496,7 @@ def sample_trades():
 def test_generate_backtest_chart_returns_base64(sample_df, sample_trades):
     equity = [100000 + i * 10 for i in range(100)]
     drawdown = [0.0] * 50 + [-0.01 * (i-50) for i in range(50, 100)]
-    
+
     result = generate_backtest_chart(sample_df, sample_trades, equity, drawdown)
     assert isinstance(result, str)
     assert len(result) > 100
@@ -504,6 +513,7 @@ def test_generate_regime_chart_returns_base64(sample_df):
 ```bash
 pytest tests/test_chart_service.py -v
 ```
+
 Expected: FAIL (模块不存在)
 
 **Step 3: 创建图表服务**
@@ -523,16 +533,16 @@ def generate_backtest_chart(
     drawdown_curve: List[float]
 ) -> str:
     """生成回测结果图表，返回base64字符串"""
-    
+
     fig = make_subplots(
         rows=3, cols=1,
         row_heights=[0.5, 0.25, 0.25],
         vertical_spacing=0.05,
         subplot_titles=('价格走势', '资金曲线', '回撤曲线')
     )
-    
+
     dates = df['trade_date'].tolist()
-    
+
     fig.add_trace(
         go.Candlestick(
             x=dates,
@@ -546,11 +556,11 @@ def generate_backtest_chart(
         ),
         row=1, col=1
     )
-    
+
     if trades:
         buy_trades = [t for t in trades if t.signal_type == "BUY"]
         sell_trades = [t for t in trades if t.signal_type == "SELL"]
-        
+
         if buy_trades:
             fig.add_trace(
                 go.Scatter(
@@ -563,7 +573,7 @@ def generate_backtest_chart(
                 ),
                 row=1, col=1
             )
-        
+
         if sell_trades:
             fig.add_trace(
                 go.Scatter(
@@ -576,7 +586,7 @@ def generate_backtest_chart(
                 ),
                 row=1, col=1
             )
-    
+
     fig.add_trace(
         go.Scatter(
             x=dates,
@@ -588,7 +598,7 @@ def generate_backtest_chart(
         ),
         row=2, col=1
     )
-    
+
     fig.add_trace(
         go.Scatter(
             x=dates,
@@ -601,7 +611,7 @@ def generate_backtest_chart(
         ),
         row=3, col=1
     )
-    
+
     fig.update_layout(
         height=800,
         showlegend=True,
@@ -610,26 +620,26 @@ def generate_backtest_chart(
         plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=50, r=50, t=50, b=50),
     )
-    
+
     fig.update_xaxes(rangeslider_visible=False)
     fig.update_yaxes(gridcolor='rgba(255,255,255,0.1)')
-    
+
     img_bytes = fig.to_image(format="png", width=900, height=800, scale=1.5)
     return base64.b64encode(img_bytes).decode()
 
 
 def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
     """生成择势分析图表"""
-    
+
     fig = make_subplots(
         rows=2, cols=1,
         row_heights=[0.7, 0.3],
         vertical_spacing=0.1,
         subplot_titles=('价格走势', 'ADX指标')
     )
-    
+
     dates = df['trade_date'].tolist()
-    
+
     fig.add_trace(
         go.Scatter(
             x=dates,
@@ -639,7 +649,7 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
         ),
         row=1, col=1
     )
-    
+
     ma20 = df['close'].rolling(20).mean()
     fig.add_trace(
         go.Scatter(
@@ -650,7 +660,7 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
         ),
         row=1, col=1
     )
-    
+
     adx = _calculate_adx(df)
     fig.add_trace(
         go.Scatter(
@@ -661,14 +671,14 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
         ),
         row=2, col=1
     )
-    
+
     fig.add_hline(y=25, line_dash="dash", line_color="gray", row=2, col=1,
                   annotation_text="趋势线", annotation_position="right")
-    
+
     regime = analysis.get('regime', 'unknown')
     regime_text = "趋势行情" if regime == 'trend' else "震荡行情"
     regime_color = "#22c55e" if regime == 'trend' else "#f59e0b"
-    
+
     fig.add_annotation(
         text=regime_text,
         xref="paper", yref="paper",
@@ -680,7 +690,7 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
         borderwidth=2,
         borderpad=4,
     )
-    
+
     fig.update_layout(
         height=500,
         showlegend=True,
@@ -689,9 +699,9 @@ def generate_regime_chart(df: pd.DataFrame, analysis: dict) -> str:
         plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=50, r=50, t=50, b=50),
     )
-    
+
     fig.update_yaxes(gridcolor='rgba(255,255,255,0.1)')
-    
+
     img_bytes = fig.to_image(format="png", width=800, height=500, scale=1.5)
     return base64.b64encode(img_bytes).decode()
 
@@ -701,27 +711,27 @@ def _calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
     high = df['high']
     low = df['low']
     close = df['close']
-    
+
     plus_dm = high.diff()
     minus_dm = -low.diff()
-    
+
     plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0.0)
     minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0.0)
-    
+
     tr = pd.concat([
         high - low,
         (high - close.shift()).abs(),
         (low - close.shift()).abs()
     ], axis=1).max(axis=1)
-    
+
     atr = tr.rolling(period).mean()
-    
+
     plus_di = 100 * (plus_dm.rolling(period).mean() / atr.replace(0, float('nan')))
     minus_di = 100 * (minus_dm.rolling(period).mean() / atr.replace(0, float('nan')))
-    
+
     dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, float('nan')))
     adx = dx.rolling(period).mean()
-    
+
     return adx.fillna(0)
 ```
 
@@ -730,6 +740,7 @@ def _calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
 ```bash
 pytest tests/test_chart_service.py -v
 ```
+
 Expected: PASS
 
 **Step 5: 提交**
@@ -744,6 +755,7 @@ git commit -m "feat(chart): add backtest and regime chart generation service"
 ## Task 5: 集成图表到回测结果页
 
 **Files:**
+
 - Modify: `pixiu/state.py`
 - Modify: `pixiu/pages/home.py`
 
@@ -756,11 +768,11 @@ backtest_charts: Dict[str, str] = {}
 
 async def run_backtest(self):
     # ... 现有代码 ...
-    
+
     # 在回测循环中，生成图表
     for i, strategy_name in enumerate(self.selected_strategies):
         # ... 现有回测代码 ...
-        
+
         # 生成图表
         from pixiu.services.chart_service import generate_backtest_chart
         chart_base64 = generate_backtest_chart(
@@ -769,9 +781,9 @@ async def run_backtest(self):
             result.equity_curve, 
             result.drawdown_curve
         )
-        
+
         self.backtest_charts[strategy_name] = chart_base64
-        
+
         # ... 添加结果到backtest_results ...
 ```
 
@@ -791,7 +803,7 @@ def render_backtest_result(result: dict) -> rx.Component:
                     color_scheme=rx.cond(result["total_return"] >= 0, "green", "red"),
                 ),
             ),
-            
+
             rx.grid(
                 rx.box(
                     rx.text("年化收益", font_size="sm", color="gray.400"),
@@ -812,7 +824,7 @@ def render_backtest_result(result: dict) -> rx.Component:
                 columns="4",
                 spacing="4",
             ),
-            
+
             rx.box(
                 rx.image(
                     src=f"data:image/png;base64,{State.backtest_charts[result['strategy']]}",
@@ -821,7 +833,7 @@ def render_backtest_result(result: dict) -> rx.Component:
                 ),
                 margin_top="1rem",
             ),
-            
+
             spacing="3",
         ),
         padding="1rem",
@@ -843,6 +855,7 @@ git commit -m "feat(ui): integrate backtest charts into results page"
 ## Task 6: 集成图表到择势分析页
 
 **Files:**
+
 - Modify: `pixiu/state.py`
 - Modify: `pixiu/pages/home.py`
 
@@ -855,7 +868,7 @@ regime_chart: str = ""
 
 async def analyze_regime(self):
     # ... 现有代码 ...
-    
+
     # 生成择势图表
     if df is not None and not df.empty:
         from pixiu.services.chart_service import generate_regime_chart
@@ -878,6 +891,7 @@ git commit -m "feat(ui): add regime analysis chart visualization"
 ## Task 7: 创建AI解释提示词模板
 
 **Files:**
+
 - Create: `pixiu/services/explain_prompts.py`
 
 **Step 1: 创建提示词模板文件**
@@ -890,7 +904,7 @@ EXPLAIN_PROMPTS = {
 1. 什么是总收益率？
 2. 数值 {value} 代表什么水平？（优秀/一般/较差，给出判断依据）
 3. 对普通投资者意味着什么？请用生活化的比喻。""",
-    
+
     "sharpe_ratio": """用简单易懂的中文解释：
 1. 什么是夏普比率？请用大白话解释。
 2. 数值 {value} 代表什么水平？
@@ -898,27 +912,27 @@ EXPLAIN_PROMPTS = {
    - 0.5-1：一般
    - 小于0.5：较差
 3. 为什么这个指标对投资者很重要？""",
-    
+
     "max_drawdown": """用简单易懂的中文解释：
 1. 什么是最大回撤？用通俗的比喻解释。
 2. {value} 的回撤意味着什么？
 3. 投资者应该如何理解和应对这种程度的回撤？""",
-    
+
     "win_rate": """用简单易懂的中文解释：
 1. 什么是胜率？
 2. 胜率 {value} 意味着什么？
 3. 胜率高的策略一定好吗？请解释胜率和盈利的关系。""",
-    
+
     "annualized_return": """用简单易懂的中文解释：
 1. 什么是年化收益率？
 2. {value} 的年化收益是什么水平？
 3. 这个收益和银行存款、理财产品相比如何？""",
-    
+
     "regime": """用简单易懂的中文解释：
 1. 当前个股处于 {regime} 状态，这是什么意思？
 2. 这对投资者意味着什么？
 3. 在这种市场状态下，投资者应该采取什么策略？""",
-    
+
     "adx": """用简单易懂的中文解释：
 1. 什么是ADX指标？它的作用是什么？
 2. 当前ADX值 {value} 代表什么？
@@ -926,22 +940,22 @@ EXPLAIN_PROMPTS = {
    - 20-25：趋势开始形成
    - 大于25：强趋势
 3. 投资者应该如何利用这个信息来做决策？""",
-    
+
     "volatility": """用简单易懂的中文解释：
 1. 什么是波动率？
 2. 当前波动率 {value} 意味着什么？（高波动/低波动）
 3. 波动率对投资者有什么影响？""",
-    
+
     "strategy_trend": """用简单易懂的中文解释趋势强度策略：
 1. 这个策略的核心思想是什么？
 2. 它是如何判断买入和卖出时机的？
 3. 这个策略适合什么样的市场环境？有什么优缺点？""",
-    
+
     "strategy_rsi": """用简单易懂的中文解释RSI策略：
 1. 什么是RSI指标？
 2. 这个策略是如何产生交易信号的？
 3. 使用这个策略需要注意什么？""",
-    
+
     "strategy_grid": """用简单易懂的中文解释网格交易策略：
 1. 什么是网格交易？用简单的比喻解释。
 2. 这个策略适合什么样的市场？
@@ -966,6 +980,7 @@ git commit -m "feat(ai): add explanation prompt templates for concepts"
 ## Task 8: 添加AI解释功能到State
 
 **Files:**
+
 - Modify: `pixiu/state.py`
 
 **Step 1: 添加AI解释相关字段和方法**
@@ -981,21 +996,21 @@ async def explain_concept(self, concept: str, value: str = ""):
     self.ai_explaining = True
     self.current_explanation = ""
     yield
-    
+
     try:
         from pixiu.services.ai_service import AIReportService
         from pixiu.services.explain_prompts import get_prompt
-        
+
         prompt = get_prompt(
             concept,
             value=value,
             regime="趋势" if self.stock_regime == "trend" else "震荡",
             strategy=self.selected_strategies[0] if self.selected_strategies else "未知"
         )
-        
+
         ai_service = AIReportService(self.glm_api_key)
         self.current_explanation = await ai_service._call_api(prompt)
-        
+
     except Exception as e:
         self.current_explanation = f"解释生成失败: {str(e)}"
     finally:
@@ -1018,6 +1033,7 @@ git commit -m "feat(state): add AI explanation methods"
 ## Task 9: 创建解释按钮组件
 
 **Files:**
+
 - Create: `pixiu/components/explain_button.py`
 
 **Step 1: 创建组件**
@@ -1105,6 +1121,7 @@ git commit -m "feat(ui): add explain button and modal components"
 ## Task 10: 集成AI解释到各页面
 
 **Files:**
+
 - Modify: `pixiu/pages/home.py`
 - Modify: `pixiu/pixiu.py`
 
@@ -1132,6 +1149,7 @@ git commit -m "feat(ui): integrate AI explanation buttons across all pages"
 ## Task 11: 添加依赖并完成测试
 
 **Files:**
+
 - Modify: `requirements.txt`
 
 **Step 1: 添加依赖**
@@ -1153,6 +1171,7 @@ pytest tests/ -v
 ```bash
 reflex run
 ```
+
 完整走一遍流程，验证所有功能正常。
 
 **Step 4: 最终提交**
