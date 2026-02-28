@@ -696,7 +696,7 @@ def render_backtest_result(result: dict) -> rx.Component:
             ),
             
             rx.cond(
-                State.get_backtest_chart(result["strategy"]) != "",
+                result["chart"] != "",
                 rx.box(
                     rx.text(
                         f"{result['strategy']} 策略回测图表",
@@ -705,7 +705,7 @@ def render_backtest_result(result: dict) -> rx.Component:
                         margin_bottom="0.5rem",
                     ),
                     rx.image(
-                        src=f"data:image/png;base64,{State.get_backtest_chart(result['strategy'])}",
+                        src=f"data:image/png;base64,{result['chart']}",
                         width="100%",
                         border_radius="md",
                     ),

@@ -364,6 +364,7 @@ class State(rx.State):
                 
                 debug_log(f"[回测] 策略 {strategy_name} 完成: 收益={result.total_return:.2f}%, 夏普={result.sharpe_ratio:.2f}")
                 
+                chart_base64_value = ""
                 try:
                     chart_base64 = generate_backtest_chart(
                         df_with_signals,
@@ -372,9 +373,13 @@ class State(rx.State):
                         result.drawdown_curve
                     )
                     self.backtest_charts[strategy_name] = chart_base64
-                    debug_log(f"[回测] 策略 {strategy_name} 图表生成成功")
+                    chart_base64_value = chart_base64
+                    debug_log(f"[回测] 策略 {strategy_name} 图表生成成功, 大小: {len(chart_base64)}")
+                    yield
                 except Exception as chart_err:
                     debug_log(f"[回测] 图表生成失败: {chart_err}")
+                    import traceback
+                    traceback.print_exc()
                 
                 trades = []
                 for t in result.trades[:50]:
@@ -394,6 +399,7 @@ class State(rx.State):
                     "win_rate": float(result.win_rate),
                     "profit_loss_ratio": float(result.profit_loss_ratio),
                     "trades": trades,
+                    "chart": chart_base64_value,
                 }]
             
             self.progress = 100
