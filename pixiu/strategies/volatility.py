@@ -54,7 +54,7 @@ class VolatilityStrategy(BaseStrategy):
         df.loc[vol_integral_normalized > entry_threshold, 'signal'] = -1
         df.loc[vol_integral_normalized < -entry_threshold, 'signal'] = 1
         
-        df.loc[:window*2, 'signal'] = 0
+        df.iloc[:window*2, df.columns.get_loc('signal')] = 0
         
         return df
     

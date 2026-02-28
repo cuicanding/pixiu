@@ -50,7 +50,7 @@ class TrendStrengthStrategy(BaseStrategy):
             )
         )
         
-        df.loc[:window, 'signal'] = 0
+        df.iloc[:window, df.columns.get_loc('signal')] = 0
         
         return df
     
