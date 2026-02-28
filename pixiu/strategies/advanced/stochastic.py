@@ -29,12 +29,13 @@ class StochasticStrategy(BaseStrategy):
             "z_threshold": z_threshold
         }
     
-    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
         close = df['close']
         lookback = self.params["lookback"]
         z_threshold = self.params["z_threshold"]
         
-        signals = pd.Series(0, index=df.index)
+        df['signal'] = 0
         
         for i in range(lookback, len(close)):
             window = close.iloc[i-lookback:i]
@@ -49,11 +50,11 @@ class StochasticStrategy(BaseStrategy):
             z_score = (actual_return - expected_return) / (sigma / np.sqrt(252))
             
             if z_score < -z_threshold:
-                signals.iloc[i] = 1
+                df.iloc[i, df.columns.get_loc('signal')] = 1
             elif z_score > z_threshold:
-                signals.iloc[i] = -1
+                df.iloc[i, df.columns.get_loc('signal')] = -1
         
-        return signals
+        return df
     
     def get_required_data(self) -> list:
         return ["close"]
