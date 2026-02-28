@@ -36,10 +36,32 @@ class State(rx.State):
     STEP_RESULT = 6
 
     REGIME_STRATEGY_MAP = {
-        "trend_trend": ["趋势强度策略", "均线策略", "动量策略"],
-        "trend_range": ["网格交易策略", "RSI策略", "波动率套利策略"],
-        "range_trend": ["趋势强度策略", "动量策略"],
-        "range_range": ["网格交易策略", "RSI策略", "波动率套利策略", "均值回归策略"],
+        "trend_trend": ["趋势强度策略", "均线交叉策略"],
+        "trend_range": ["网格交易策略", "RSI策略"],
+        "range_trend": ["趋势强度策略", "卡尔曼滤波策略"],
+        "range_range": ["网格交易策略", "RSI策略", "波动率套利策略"],
+    }
+    
+    REGIME_EXPLANATION = {
+        "trend_trend": """大盘和个股都处于趋势行情。
+特点：价格有明确方向，波动有序。
+推荐逻辑：趋势跟踪策略可以顺势而为，捕捉方向性收益。
+适合策略：趋势强度策略（基于导数判断趋势方向）、均线交叉策略（金叉做多死叉做空）。""",
+        
+        "trend_range": """大盘趋势但个股震荡。
+特点：个股在大趋势中上下波动，没有明确方向。
+推荐逻辑：震荡行情中趋势策略容易反复止损，应使用均值回归策略。
+适合策略：网格交易（高抛低吸）、RSI策略（超买卖超买卖）。""",
+        
+        "range_trend": """大盘震荡但个股有趋势。
+特点：个股走独立行情，有明确方向。
+推荐逻辑：个股趋势明确，可尝试趋势跟踪策略。
+适合策略：趋势强度策略、卡尔曼滤波策略（估计真实价格偏离）。""",
+        
+        "range_range": """大盘和个股都震荡。
+特点：价格在一定区间内波动，没有明确方向。
+推荐逻辑：震荡行情最适合均值回归类策略。
+适合策略：网格交易、RSI、波动率套利（捕捉过度波动后的回归）。""",
     }
 
     current_step: int = 1
@@ -598,6 +620,19 @@ class State(rx.State):
         """Get strategy recommendations based on regime analysis."""
         key = f"{self.market_regime}_{self.stock_regime}"
         return self.REGIME_STRATEGY_MAP.get(key, [])
+    
+    @rx.var
+    def regime_explanation(self) -> str:
+        """Get explanation for regime-based recommendations."""
+        key = f"{self.market_regime}_{self.stock_regime}"
+        return self.REGIME_EXPLANATION.get(key, "")
+    
+    @rx.var
+    def regime_summary(self) -> str:
+        """Get short summary of current regime."""
+        market_text = "趋势行情" if self.market_regime == "trend" else "震荡行情"
+        stock_text = "趋势行情" if self.stock_regime == "trend" else "震荡行情"
+        return f"大盘: {market_text} | 个股: {stock_text}"
 
     def get_backtest_chart(self, strategy: str) -> str:
         """Get backtest chart for a specific strategy."""

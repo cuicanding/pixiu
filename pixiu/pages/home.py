@@ -542,30 +542,42 @@ def step_strategy_selection() -> rx.Component:
             rx.cond(
                 State.recommended_strategies.length() > 0,
                 rx.box(
-                    rx.text("基于择势分析推荐:", font_size="sm", color="green.400", margin_bottom="0.5rem"),
-                    rx.text(
-                        rx.cond(
-                            State.market_regime == "trend",
-                            rx.cond(
-                                State.stock_regime == "trend",
-                                "大盘+个股均为趋势行情，推荐趋势跟踪策略",
-                                "大盘趋势但个股震荡，推荐网格或RSI策略"
-                            ),
-                            rx.cond(
-                                State.stock_regime == "trend",
-                                "大盘震荡但个股有趋势，可尝试趋势策略",
-                                "大盘+个股均震荡，推荐均值回归策略"
-                            )
-                        ),
-                        font_size="sm",
-                        color="gray.400",
+                    rx.hstack(
+                        rx.icon("brain", color="cyan.400"),
+                        rx.text("智能推荐", font_size="sm", font_weight="bold", color="cyan.400"),
+                        explain_button("regime_recommendation", ""),
+                        spacing="2",
+                        align_items="center",
                     ),
-                    padding="0.75rem",
-                    bg="green.900",
+                    
+                    rx.box(
+                        rx.text(State.regime_summary, font_size="sm", color="white", margin_bottom="0.5rem"),
+                        rx.text(State.regime_explanation, font_size="xs", color="gray.400", white_space="pre-wrap"),
+                        margin_top="0.5rem",
+                        padding="0.75rem",
+                        bg="gray.900",
+                        border_radius="md",
+                    ),
+                    
+                    rx.hstack(
+                        rx.text("推荐策略:", font_size="xs", color="gray.500"),
+                        rx.foreach(
+                            State.recommended_strategies,
+                            lambda s: rx.badge(s, color_scheme="cyan", variant="soft", size="1")
+                        ),
+                        spacing="2",
+                        margin_top="0.5rem",
+                    ),
+                    
+                    padding="1rem",
+                    bg="gray.800",
                     border_radius="md",
+                    border="1px solid cyan.700",
                     margin_bottom="1rem",
                 ),
             ),
+            
+            rx.text("点击策略卡片选择/取消:", font_size="sm", color="gray.400"),
             
             rx.grid(
                 rx.foreach(State.available_strategies, render_strategy),
@@ -576,7 +588,7 @@ def step_strategy_selection() -> rx.Component:
             
             rx.hstack(
                 rx.text(f"已选 ", color="gray.400"),
-                rx.text(State.selected_strategies.length(), color="gray.400"),
+                rx.text(State.selected_strategies.length(), color="cyan.400", font_weight="bold"),
                 rx.text(" 个策略", color="gray.400"),
             ),
             
