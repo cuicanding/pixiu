@@ -97,12 +97,8 @@ class State(rx.State):
     regime_analysis: Dict = {}
     combine_mode: str = "complementary"
     filter_threshold: int = 2
-    
-    ai_report: str = ""
-    ai_generating: bool = False
-    glm_api_key: str = ""
-    _db_initialized: bool = False
     regime_chart: str = ""
+    market_chart: str = ""
     
     explain_modal_open: bool = False
     current_explanation: str = ""
@@ -382,7 +378,13 @@ class State(rx.State):
                 
                 engine = BacktestEngine(backtest_config)
                 df_with_signals = strategy.generate_signals(df)
-                result = engine.run(df_with_signals, df_with_signals['signal'])
+                
+                if 'signal' not in df_with_signals.columns:
+                    debug_log(f"[回测] 策略 {strategy_name} 未生成signal列")
+                    continue
+                
+                signal_series = df_with_signals['signal'].values if hasattr(df_with_signals['signal'], 'values') else df_with_signals['signal']
+                result = engine.run(df_with_signals, signal_series)
                 
                 debug_log(f"[回测] 策略 {strategy_name} 完成: 收益={result.total_return:.2f}%, 夏普={result.sharpe_ratio:.2f}")
                 
@@ -533,6 +535,7 @@ class State(rx.State):
         from pixiu.services.chart_service import generate_regime_chart
         
         debug_log(f"[择势分析] 开始执行, 股票: {self.selected_stock}, 市场: {self.current_market}")
+        debug_log(f"[择势分析] 时间范围: {self.backtest_start_date} ~ {self.backtest_end_date}")
         
         self.is_loading = True
         self.loading_message = "分析市场和个股状态..."
@@ -544,40 +547,73 @@ class State(rx.State):
             debug_log("[择势分析] 数据库初始化完成")
             
             db = Database("data/stocks.db")
-            data_service = DataService(db, use_mock=True)
+            data_service = DataService(db, use_mock=False)
             detector = MarketRegimeDetector()
             
-            debug_log("[择势分析] 生成大盘模拟数据...")
-            market_df = data_service._generate_mock_history("index_" + self.current_market)
+            # 获取大盘真实数据
+            debug_log(f"[择势分析] 获取大盘指数数据...")
+            market_codes = {"A股": "000001", "港股": "HSI", "美股": "DJI"}
+            market_code = market_codes.get(self.current_market, "000001")
+            
+            self.loading_message = f"获取大盘数据 ({market_code})..."
+            yield
+            
+            market_df = await data_service.fetch_stock_history(
+                market_code, 
+                self.current_market if self.current_market != "A股" else "index",
+                self.backtest_start_date,
+                self.backtest_end_date
+            )
+            
             if market_df is not None and not market_df.empty:
                 market_analysis = detector.get_analysis_detail(market_df)
                 self.market_regime = market_analysis["regime"]
                 self.market_index_data = market_analysis
+                debug_log(f"[择势分析] 大盘状态: {self.market_regime}, ADX: {market_analysis.get('adx'):.2f}")
+                
+                # 生成大盘图表
+                try:
+                    self.market_chart = generate_regime_chart(market_df, market_analysis)
+                    debug_log(f"[择势分析] 大盘图表生成成功")
+                except Exception as e:
+                    debug_log(f"[择势分析] 大盘图表生成失败: {e}")
+            else:
+                debug_log("[择势分析] 大盘数据获取失败，使用模拟数据")
+                market_df = data_service._generate_mock_history(market_code)
+                market_analysis = detector.get_analysis_detail(market_df)
+                self.market_regime = market_analysis["regime"]
+                self.market_index_data = market_analysis
                 self.using_mock_data = True
-                debug_log(f"[择势分析] 大盘状态: {self.market_regime}, ADX: {market_analysis.get('adx')}")
             
+            # 获取个股数据
             debug_log(f"[择势分析] 分析个股: {self.selected_stock}")
+            self.loading_message = f"获取个股数据 ({self.selected_stock})..."
+            yield
+            
             if self.selected_stock:
-                df = await data_service.get_cached_data(self.selected_stock)
-                debug_log(f"[择势分析] 缓存数据: {len(df) if df is not None and not df.empty else 0} 条")
-                if df is None or df.empty:
-                    debug_log("[择势分析] 尝试下载股票数据...")
-                    success, _ = await data_service.download_and_save(
-                        self.selected_stock,
-                        self.current_market
-                    )
-                    if success:
-                        df = await data_service.get_cached_data(self.selected_stock)
-                        debug_log(f"[择势分析] 下载后缓存数据: {len(df) if df is not None and not df.empty else 0} 条")
+                df = await data_service.fetch_stock_history(
+                    self.selected_stock, 
+                    self.current_market,
+                    self.backtest_start_date,
+                    self.backtest_end_date
+                )
+                debug_log(f"[择势分析] 获取到数据: {len(df) if df is not None and not df.empty else 0} 条")
                 
                 if df is not None and not df.empty:
                     stock_analysis = detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
-                    self.regime_chart = generate_regime_chart(df, stock_analysis)
-                    debug_log(f"[择势分析] 个股状态: {self.stock_regime}, ADX: {stock_analysis.get('adx')}")
+                    
+                    # 生成个股图表
+                    try:
+                        self.regime_chart = generate_regime_chart(df, stock_analysis)
+                        debug_log(f"[择势分析] 个股图表生成成功")
+                    except Exception as e:
+                        debug_log(f"[择势分析] 个股图表生成失败: {e}")
+                    
+                    debug_log(f"[择势分析] 个股状态: {self.stock_regime}, ADX: {stock_analysis.get('adx'):.2f}")
                 else:
-                    debug_log("[择势分析] 无缓存数据，使用模拟数据")
+                    debug_log("[择势分析] 无数据，使用模拟数据")
                     df = data_service._generate_mock_history(self.selected_stock)
                     stock_analysis = detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]

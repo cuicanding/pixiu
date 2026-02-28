@@ -410,11 +410,44 @@ def step_regime_analysis() -> rx.Component:
                         rx.badge("使用模拟数据", color_scheme="yellow", variant="soft"),
                     ),
                     
+                    # 大盘图表
+                    rx.cond(
+                        State.market_chart != "",
+                        rx.box(
+                            rx.text(
+                                "大盘指数走势图 (上证指数)",
+                                font_size="sm",
+                                color="cyan.400",
+                                margin_bottom="0.5rem",
+                            ),
+                            rx.image(
+                                src=f"data:image/png;base64,{State.market_chart}",
+                                width="100%",
+                                border_radius="md",
+                            ),
+                            rx.hstack(
+                                rx.text("大盘ADX: ", font_size="xs", color="gray.500"),
+                                rx.text(State.market_index_data.get("adx", 0), font_size="xs", color="purple.400"),
+                                rx.text(" | 大盘状态: ", font_size="xs", color="gray.500"),
+                                rx.text(
+                                    rx.cond(State.market_regime == "trend", "趋势行情", "震荡行情"),
+                                    font_size="xs",
+                                    color=rx.cond(State.market_regime == "trend", "green.400", "yellow.400"),
+                                ),
+                                spacing="1",
+                                margin_top="0.5rem",
+                            ),
+                            width="100%",
+                            margin_top="1rem",
+                        ),
+                    ),
+                    
+                    # 个股图表
                     rx.cond(
                         State.regime_chart != "",
                         rx.box(
                             rx.text(
-                                f"{State.selected_stock_name} ({State.selected_stock}) 价格走势图",
+                                f"{State.selected_stock_name} ({State.selected_stock}) 个股走势图",
                                 font_size="sm",
                                 color="cyan.400",
                                 margin_bottom="0.5rem",
@@ -425,14 +458,19 @@ def step_regime_analysis() -> rx.Component:
                                 border_radius="md",
                             ),
                             rx.hstack(
-                                rx.text("上图显示: ", font_size="xs", color="gray.500"),
-                                rx.text("蓝色线=收盘价, ", font_size="xs", color="#00D4FF"),
-                                rx.text("橙色虚线=20日均线, ", font_size="xs", color="orange"),
-                                rx.text("紫色线=ADX指标(>25表示趋势)", font_size="xs", color="#a855f7"),
+                                rx.text("个股ADX: ", font_size="xs", color="gray.500"),
+                                rx.text(State.regime_analysis.get("adx", 0), font_size="xs", color="purple.400"),
+                                rx.text(" | 个股状态: ", font_size="xs", color="gray.500"),
+                                rx.text(
+                                    rx.cond(State.stock_regime == "trend", "趋势行情", "震荡行情"),
+                                    font_size="xs",
+                                    color=rx.cond(State.stock_regime == "trend", "green.400", "yellow.400"),
+                                ),
                                 spacing="1",
                                 margin_top="0.5rem",
                             ),
                             width="100%",
+                            margin_top="1rem",
                         ),
                     ),
                     
