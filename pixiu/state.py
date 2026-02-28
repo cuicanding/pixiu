@@ -1,5 +1,6 @@
 """Global state management - connected to real services."""
 
+import os
 import reflex as rx
 from typing import List, Dict
 from pathlib import Path
@@ -32,8 +33,7 @@ class State(rx.State):
     STEP_SEARCH = 2
     STEP_REGIME = 3
     STEP_STRATEGY = 4
-    STEP_CONFIG = 5
-    STEP_RESULT = 6
+    STEP_RESULT = 5
 
     REGIME_STRATEGY_MAP = {
         "trend_trend": ["趋势强度策略", "均线交叉策略"],
@@ -101,12 +101,13 @@ class State(rx.State):
     market_chart: str = ""
     _db_initialized: bool = False
     
+    regime_timeline: Dict = {}
+    timeline_loading: bool = False
+    
     explain_modal_open: bool = False
     current_explanation: str = ""
     ai_explaining: bool = False
     glm_api_key: str = ""
-    _db_initialized: bool = False
-    _db_initialized: bool = False
     
     time_range_mode: str = "quick"
     quick_range: str = "12m"
@@ -141,6 +142,12 @@ class State(rx.State):
         self.initial_capital = getattr(config, 'initial_capital', 100000.0)
         self.commission_rate = getattr(config, 'commission_rate', 0.0003)
         self.position_size = getattr(config, 'position_size', 0.95)
+    
+    @rx.event
+    def on_load(self):
+        """Called when page loads - ensure settings are loaded."""
+        if not self.glm_api_key:
+            self._load_settings()
     
     def _update_date_range(self):
         """Update backtest start/end dates based on current mode."""
@@ -237,7 +244,7 @@ class State(rx.State):
             self.current_step = step
     
     def next_step(self):
-        if self.current_step < 6:
+        if self.current_step < self.STEP_RESULT:
             self.current_step += 1
             if self.current_step > self.max_step:
                 self.max_step = self.current_step
@@ -510,7 +517,12 @@ class State(rx.State):
     
     def save_settings(self):
         import os
+        from pathlib import Path
+        
+        # 更新环境变量
         os.environ["GLM_API_KEY"] = self.glm_api_key
+        
+        # 更新config对象
         if hasattr(config, 'glm_api_key'):
             config.glm_api_key = self.glm_api_key
         if hasattr(config, 'initial_capital'):
@@ -519,10 +531,25 @@ class State(rx.State):
             config.commission_rate = self.commission_rate
         if hasattr(config, 'position_size'):
             config.position_size = self.position_size
+        
+        # 持久化到.env文件
+        env_file = Path(__file__).parent.parent / ".env"
+        env_content = f"""GLM_API_KEY={self.glm_api_key}
+DATABASE_PATH=data/stocks.db
+CACHE_DIR=data/cache
+"""
+        try:
+            env_file.write_text(env_content)
+        except Exception as e:
+            print(f"保存配置失败: {e}")
     
     def clear_error(self):
         self.error_message = ""
     
+    def _get_regime_window(self) -> int:
+        """获取择势窗口大小"""
+        return getattr(config, 'regime_window_days', 60)
+
     async def _get_market_index_data(self) -> pd.DataFrame:
         """Get market index data (上证指数 for A股, etc.)"""
         from pixiu.services.data_service import DataService
@@ -541,7 +568,7 @@ class State(rx.State):
     
     async def analyze_regime(self):
         """Analyze both market and stock regime"""
-        from pixiu.analysis import MarketRegimeDetector
+        from pixiu.analysis import MarketRegimeDetector, RegimeTimelineAnalyzer
         from pixiu.services.data_service import DataService
         from pixiu.services.chart_service import generate_regime_chart
         
@@ -560,6 +587,7 @@ class State(rx.State):
             db = Database("data/stocks.db")
             data_service = DataService(db, use_mock=False)
             detector = MarketRegimeDetector()
+            timeline_analyzer = RegimeTimelineAnalyzer(window=self._get_regime_window())
             
             # 获取大盘真实数据
             debug_log(f"[择势分析] 获取大盘指数数据...")
@@ -622,6 +650,17 @@ class State(rx.State):
                     except Exception as e:
                         debug_log(f"[择势分析] 个股图表生成失败: {e}")
                     
+                    # 时间线择势分析
+                    try:
+                        self.timeline_loading = True
+                        self.regime_timeline = timeline_analyzer.analyze_timeline(df)
+                        debug_log(f"[择势分析] 时间线分析完成: {len(self.regime_timeline.get('segments', []))} 个阶段")
+                    except Exception as e:
+                        debug_log(f"[择势分析] 时间线分析失败: {e}")
+                        self.regime_timeline = {}
+                    finally:
+                        self.timeline_loading = False
+                    
                     debug_log(f"[择势分析] 个股状态: {self.stock_regime}, ADX: {stock_analysis.get('adx'):.2f}")
                 else:
                     debug_log("[择势分析] 无数据，使用模拟数据")
@@ -631,6 +670,13 @@ class State(rx.State):
                     self.regime_analysis = stock_analysis
                     self.regime_chart = generate_regime_chart(df, stock_analysis)
                     self.using_mock_data = True
+                    
+                    # 时间线择势分析 (模拟数据)
+                    try:
+                        self.regime_timeline = timeline_analyzer.analyze_timeline(df)
+                    except Exception:
+                        self.regime_timeline = {}
+                    
                     debug_log(f"[择势分析] 个股状态(模拟): {self.stock_regime}")
 
             self.recommended_strategies = self.regime_recommendations
@@ -692,12 +738,20 @@ class State(rx.State):
         self.current_explanation = ""
         yield
         
+        # 检查API Key
+        api_key = self.glm_api_key or getattr(config, 'glm_api_key', "") or os.getenv("GLM_API_KEY", "")
+        if not api_key:
+            self.current_explanation = "请先在设置页面配置 GLM API Key"
+            self.ai_explaining = False
+            yield
+            return
+        
         try:
             from pixiu.services.ai_service import AIReportService
             from pixiu.services.explain_prompts import get_prompt
             
             prompt = get_prompt(concept, value=value, regime=self.stock_regime)
-            self.current_explanation = await AIReportService(self.glm_api_key)._call_api(prompt)
+            self.current_explanation = await AIReportService(api_key)._call_api(prompt)
         except Exception as e:
             self.current_explanation = f"解释生成失败: {str(e)}"
         finally:
