@@ -583,8 +583,8 @@ class State(rx.State):
             self.combine_mode = mode
 
     def go_to_strategy_step(self):
-        """跳转到策略选择步骤"""
-        self.selected_strategies = []
+        """跳转到策略选择步骤，自动选中推荐策略"""
+        self.selected_strategies = self.recommended_strategies.copy() if self.recommended_strategies else []
         self.current_step = self.STEP_STRATEGY
         self.max_step = max(self.max_step, self.STEP_STRATEGY)
 

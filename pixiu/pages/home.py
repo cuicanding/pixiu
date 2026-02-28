@@ -485,16 +485,27 @@ def render_strategy(s: dict) -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.checkbox(
-                    is_checked=State.selected_strategies.contains(name),
-                ),
                 rx.text(name, font_weight="bold"),
+                rx.spacer(),
                 rx.cond(
                     State.recommended_strategies.contains(name),
                     rx.badge("推荐", color_scheme="green", size="1"),
                 ),
+                rx.badge(
+                    rx.cond(
+                        State.selected_strategies.contains(name),
+                        "已选",
+                        ""
+                    ),
+                    color_scheme=rx.cond(
+                        State.selected_strategies.contains(name),
+                        "cyan",
+                        "gray"
+                    ),
+                    size="1",
+                ),
                 width="100%",
-                justify="between",
+                align_items="center",
             ),
             rx.text(
                 s.get("description", ""),
