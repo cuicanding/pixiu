@@ -65,6 +65,7 @@ class State(rx.State):
     position_size: float = 0.95
     
     backtest_results: List[Dict] = []
+    backtest_charts: Dict[str, str] = {}
     
     market_regime: str = "unknown"
     stock_regime: str = "unknown"
@@ -79,6 +80,11 @@ class State(rx.State):
     ai_generating: bool = False
     glm_api_key: str = ""
     _db_initialized: bool = False
+    regime_chart: str = ""
+    
+    explain_modal_open: bool = False
+    current_explanation: str = ""
+    ai_explaining: bool = False
     
     time_range_mode: str = "quick"
     quick_range: str = "12m"
@@ -482,6 +488,7 @@ class State(rx.State):
         """Analyze both market and stock regime"""
         from pixiu.analysis import MarketRegimeDetector
         from pixiu.services.data_service import DataService
+        from pixiu.services.chart_service import generate_regime_chart
         
         debug_log(f"[择势分析] 开始执行, 股票: {self.selected_stock}, 市场: {self.current_market}")
         
@@ -525,6 +532,7 @@ class State(rx.State):
                     stock_analysis = detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
+                    self.regime_chart = generate_regime_chart(df, stock_analysis)
                     debug_log(f"[择势分析] 个股状态: {self.stock_regime}, ADX: {stock_analysis.get('adx')}")
                 else:
                     debug_log("[择势分析] 无缓存数据，使用模拟数据")
@@ -532,6 +540,7 @@ class State(rx.State):
                     stock_analysis = detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
+                    self.regime_chart = generate_regime_chart(df, stock_analysis)
                     self.using_mock_data = True
                     debug_log(f"[择势分析] 个股状态(模拟): {self.stock_regime}")
 
@@ -566,3 +575,26 @@ class State(rx.State):
         """Get strategy recommendations based on regime analysis."""
         key = f"{self.market_regime}_{self.stock_regime}"
         return self.REGIME_STRATEGY_MAP.get(key, [])
+
+    async def explain_concept(self, concept: str, value: str = ""):
+        """Generate AI explanation for a concept."""
+        self.explain_modal_open = True
+        self.ai_explaining = True
+        self.current_explanation = ""
+        yield
+        
+        try:
+            from pixiu.services.ai_service import AIReportService
+            from pixiu.services.explain_prompts import get_prompt
+            
+            prompt = get_prompt(concept, value=value, regime=self.stock_regime)
+            self.current_explanation = await AIReportService(self.glm_api_key)._call_api(prompt)
+        except Exception as e:
+            self.current_explanation = f"解释生成失败: {str(e)}"
+        finally:
+            self.ai_explaining = False
+        yield
+
+    def close_explain_modal(self):
+        """Close the explanation modal."""
+        self.explain_modal_open = False

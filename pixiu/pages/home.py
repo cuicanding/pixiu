@@ -392,6 +392,15 @@ def step_regime_analysis() -> rx.Component:
                         rx.badge("使用模拟数据", color_scheme="yellow", variant="soft"),
                     ),
                     
+                    rx.cond(
+                        State.regime_chart != "",
+                        rx.image(
+                            src=f"data:image/png;base64,{State.regime_chart}",
+                            width="100%",
+                            border_radius="md",
+                        ),
+                    ),
+                    
                     spacing="4",
                 ),
             ),
