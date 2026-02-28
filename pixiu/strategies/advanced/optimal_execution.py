@@ -28,13 +28,14 @@ class OptimalExecutionStrategy(BaseStrategy):
             "volume_threshold": volume_threshold
         }
     
-    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
         close = df['close']
         volume = df['volume']
         execution_window = self.params["execution_window"]
         volume_threshold = self.params["volume_threshold"]
         
-        signals = pd.Series(0, index=df.index)
+        df['signal'] = 0
         
         avg_volume = volume.rolling(execution_window * 5).mean()
         vwap = (close * volume).rolling(execution_window * 5).sum() / \
@@ -45,11 +46,11 @@ class OptimalExecutionStrategy(BaseStrategy):
             vol_ratio = volume.iloc[i] / avg_volume.iloc[i]
             
             if price_vs_vwap < -0.01 and vol_ratio > volume_threshold:
-                signals.iloc[i] = 1
+                df.iloc[i, df.columns.get_loc('signal')] = 1
             elif price_vs_vwap > 0.01 and vol_ratio > volume_threshold:
-                signals.iloc[i] = -1
+                df.iloc[i, df.columns.get_loc('signal')] = -1
         
-        return signals
+        return df
     
     def get_required_data(self) -> list:
         return ["close", "volume"]

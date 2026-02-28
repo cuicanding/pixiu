@@ -27,7 +27,8 @@ class MACrossStrategy(BaseStrategy):
             "slow_period": slow_period
         }
     
-    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
         close = df['close']
         fast_period = self.params["fast_period"]
         slow_period = self.params["slow_period"]
@@ -35,15 +36,15 @@ class MACrossStrategy(BaseStrategy):
         fast_ma = close.rolling(fast_period).mean()
         slow_ma = close.rolling(slow_period).mean()
         
-        signals = pd.Series(0, index=df.index)
+        df['signal'] = 0
         
         gold_cross = (fast_ma.shift(1) <= slow_ma.shift(1)) & (fast_ma > slow_ma)
         death_cross = (fast_ma.shift(1) >= slow_ma.shift(1)) & (fast_ma < slow_ma)
         
-        signals[gold_cross] = 1
-        signals[death_cross] = -1
+        df.loc[gold_cross, 'signal'] = 1
+        df.loc[death_cross, 'signal'] = -1
         
-        return signals
+        return df
     
     def get_required_data(self) -> list:
         return ["close"]

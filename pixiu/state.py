@@ -381,7 +381,14 @@ class State(rx.State):
                     continue
                 
                 engine = BacktestEngine(backtest_config)
-                df_with_signals = strategy.generate_signals(df)
+                signals_result = strategy.generate_signals(df)
+                
+                # 夣理Series或DataFrame返回值
+                if isinstance(signals_result, pd.Series):
+                    df_with_signals = df.copy()
+                    df_with_signals['signal'] = signals_result
+                else:
+                    df_with_signals = signals_result
                 
                 if 'signal' not in df_with_signals.columns:
                     debug_log(f"[回测] 策略 {strategy_name} 未生成signal列")
