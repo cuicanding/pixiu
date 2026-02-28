@@ -5,6 +5,7 @@ from typing import List, Dict
 from pathlib import Path
 import pandas as pd
 import sys
+from datetime import datetime, timedelta
 
 def debug_log(msg):
     """Debug logging to stdout"""
@@ -79,10 +80,19 @@ class State(rx.State):
     glm_api_key: str = ""
     _db_initialized: bool = False
     
+    time_range_mode: str = "quick"
+    quick_range: str = "12m"
+    year_range: str = ""
+    custom_start_date: str = ""
+    custom_end_date: str = ""
+    backtest_start_date: str = ""
+    backtest_end_date: str = ""
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._load_strategies()
         self._load_settings()
+        self._update_date_range()
     
     def _load_strategies(self):
         try:
@@ -103,6 +113,66 @@ class State(rx.State):
         self.initial_capital = getattr(config, 'initial_capital', 100000.0)
         self.commission_rate = getattr(config, 'commission_rate', 0.0003)
         self.position_size = getattr(config, 'position_size', 0.95)
+    
+    def _update_date_range(self):
+        """Update backtest start/end dates based on current mode."""
+        today = datetime.now()
+        self.backtest_end_date = today.strftime("%Y-%m-%d")
+        
+        if self.time_range_mode == "quick":
+            if self.quick_range == "1m":
+                start = today - timedelta(days=30)
+            elif self.quick_range == "3m":
+                start = today - timedelta(days=90)
+            elif self.quick_range == "6m":
+                start = today - timedelta(days=180)
+            elif self.quick_range == "12m":
+                start = today - timedelta(days=365)
+            elif self.quick_range == "24m":
+                start = today - timedelta(days=730)
+            elif self.quick_range == "36m":
+                start = today - timedelta(days=1095)
+            else:
+                start = today - timedelta(days=365)
+            self.backtest_start_date = start.strftime("%Y-%m-%d")
+        elif self.time_range_mode == "year":
+            if self.year_range == "this_year":
+                self.backtest_start_date = f"{today.year}-01-01"
+            elif self.year_range == "last_year":
+                self.backtest_start_date = f"{today.year - 1}-01-01"
+                self.backtest_end_date = f"{today.year - 1}-12-31"
+            elif self.year_range == "last_3_years":
+                self.backtest_start_date = f"{today.year - 3}-01-01"
+            elif self.year_range == "last_5_years":
+                self.backtest_start_date = f"{today.year - 5}-01-01"
+            else:
+                start = today - timedelta(days=365)
+                self.backtest_start_date = start.strftime("%Y-%m-%d")
+        elif self.time_range_mode == "custom":
+            self.backtest_start_date = self.custom_start_date
+            self.backtest_end_date = self.custom_end_date
+    
+    def set_quick_range(self, range_value: str):
+        self.time_range_mode = "quick"
+        self.quick_range = range_value
+        self._update_date_range()
+    
+    def set_year_range(self, range_value: str):
+        self.time_range_mode = "year"
+        self.year_range = range_value
+        self._update_date_range()
+    
+    def set_custom_start(self, date_str: str):
+        self.custom_start_date = date_str
+        if self.custom_end_date:
+            self.time_range_mode = "custom"
+            self._update_date_range()
+    
+    def set_custom_end(self, date_str: str):
+        self.custom_end_date = date_str
+        if self.custom_start_date:
+            self.time_range_mode = "custom"
+            self._update_date_range()
     
     async def _ensure_db_initialized(self):
         """Ensure database tables exist. Internal method without yield."""
