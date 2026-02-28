@@ -26,3 +26,13 @@ def get_strategy(name: str) -> "BaseStrategy | None":
 
 
 from .base import BaseStrategy
+
+# 自动导入并注册所有策略
+from .classic.rsi import RSIStrategy
+from .classic.ma_cross import MACrossStrategy
+from .classic.grid_trading import GridTradingStrategy
+from .advanced.stochastic import StochasticStrategy
+from .advanced.optimal_execution import OptimalExecutionStrategy
+from .trend_strength import TrendStrengthStrategy
+from .volatility import VolatilityStrategy
+from .kalman_filter import KalmanFilterStrategy
