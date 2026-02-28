@@ -77,7 +77,6 @@ class State(rx.State):
         if self._db_initialized:
             return
         try:
-            from pathlib import Path
             db_path = Path("data/stocks.db")
             db_path.parent.mkdir(parents=True, exist_ok=True)
             db = Database(str(db_path))
@@ -85,6 +84,7 @@ class State(rx.State):
             self._db_initialized = True
         except Exception as e:
             self.error_message = f"数据库初始化失败: {str(e)}"
+            yield
     
     def set_market_a(self):
         self.current_market = "A股"
