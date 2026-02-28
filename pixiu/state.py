@@ -36,6 +36,12 @@ class State(rx.State):
     
     backtest_results: List[Dict] = []
     
+    market_regime: str = "unknown"
+    stock_regime: str = "unknown"
+    regime_analysis: Dict = {}
+    combine_mode: str = "complementary"
+    filter_threshold: int = 2
+    
     ai_report: str = ""
     ai_generating: bool = False
     glm_api_key: str = ""
@@ -282,6 +288,31 @@ class State(rx.State):
     
     def clear_error(self):
         self.error_message = ""
+    
+    async def analyze_regime(self):
+        """分析市场状态"""
+        from pixiu.analysis import MarketRegimeDetector
+        
+        self.is_loading = True
+        self.loading_message = "分析市场状态..."
+        yield
+        
+        try:
+            if self.selected_stock:
+                db = Database("data/stocks.db")
+                data_service = DataService(db)
+                df = await data_service.get_cached_data(self.selected_stock)
+                if df is not None and not df.empty:
+                    detector = MarketRegimeDetector()
+                    self.regime_analysis = detector.get_analysis_detail(df)
+                    self.stock_regime = self.regime_analysis["regime"]
+        finally:
+            self.is_loading = False
+            yield
+
+    def set_combine_mode(self, mode: str):
+        if mode in ["equal_weight", "signal_filter", "complementary"]:
+            self.combine_mode = mode
 
     @rx.var
     def backtest_results_empty(self) -> bool:

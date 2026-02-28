@@ -135,3 +135,61 @@ class AIReportService:
         except Exception as e:
             logger.error(f"AI对比分析失败: {e}")
             return f"分析失败: {str(e)}"
+    
+    async def generate_full_report(self, stock_info: Dict, regime_analysis: Dict, backtest_results: List[Dict], strategy_params: Dict) -> str:
+        """生成完整的分析报告，包含择势判断和多策略结果"""
+        
+        if not self.client:
+            return "请先配置 GLM API Key"
+        
+        prompt = f"""请分析以下量化回测结果并生成专业报告：
+
+## 1. 股票信息
+- 代码：{stock_info.get('code', 'N/A')}
+- 名称：{stock_info.get('name', 'N/A')}
+- 市场：{stock_info.get('market', 'N/A')}
+
+## 2. 择势判断
+- 个股状态：{regime_analysis.get('regime', 'N/A')}
+- ADX：{regime_analysis.get('adx', 0):.2f}
+- MA斜率：{regime_analysis.get('ma_slope', 0):.4f}
+- 波动率：{regime_analysis.get('volatility', 0):.4f}
+
+## 3. 回测表现
+"""
+        for i, result in enumerate(backtest_results, 1):
+            prompt += f"""
+### 策略 {i}: {result.get('strategy', 'N/A')}
+- 总收益率：{result.get('total_return', 0):.2%}
+- 年化收益：{result.get('annualized_return', 0):.2%}
+- 最大回撤：{result.get('max_drawdown', 0):.2%}
+- 夏普比率：{result.get('sharpe_ratio', 0):.2f}
+- 胜率：{result.get('win_rate', 0):.2%}
+"""
+        prompt += """
+请分析：
+1. 策略表现评估
+2. 择势判断准确性
+3. 风险提示
+4. 改进建议
+"""
+        return await self._call_api(prompt)
+    
+    async def _call_api(self, prompt: str) -> str:
+        """调用GLM API"""
+        if not self.client:
+            return "请先配置 GLM API Key"
+        
+        try:
+            response = self.client.chat.completions.create(
+                model="glm-5",
+                messages=[
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"AI分析生成失败: {e}")
+            return f"AI分析生成失败: {str(e)}"
