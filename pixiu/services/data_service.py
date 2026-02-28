@@ -27,6 +27,7 @@ socket.setdefaulttimeout(30)
 
 from pixiu.services.database import Database
 from pixiu.models.stock import Stock, DailyQuote
+from pixiu.config import config
 
 
 MOCK_STOCKS = {
@@ -155,9 +156,23 @@ class DataService:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
     ) -> pd.DataFrame:
-        """获取股票历史数据 - 优先baostock，失败fallback到akshare/mock"""
-        if not self.use_mock:
-            if market == "A股" and bs is not None:
+        """获取股票历史数据 - 按配置优先级自动切换数据源"""
+        priority_list = config.data_source_priority.get(market, ["mock"])
+        
+        for source in priority_list:
+            if source == "mock":
+                logger.info(f"使用模拟数据获取 {code}")
+                return self._generate_mock_history(code)
+            
+            if self.use_mock:
+                continue
+                
+            if source == "baostock":
+                if market != "A股" and market != "index":
+                    continue
+                if bs is None:
+                    logger.warning("baostock未安装，跳过")
+                    continue
                 try:
                     df = await asyncio.wait_for(
                         asyncio.to_thread(
@@ -170,17 +185,23 @@ class DataService:
                         return df
                 except Exception as e:
                     logger.warning(f"Baostock获取失败: {e}")
-            
-            try:
-                df = await asyncio.wait_for(
-                    asyncio.to_thread(self._fetch_from_akshare, code, market),
-                    timeout=30
-                )
-                if df is not None and not df.empty:
-                    logger.info(f"成功从AKShare获取 {code} 数据")
-                    return df
-            except Exception as e:
-                logger.warning(f"AKShare获取失败: {e}，使用模拟数据")
+                    
+            elif source == "akshare":
+                if ak is None:
+                    logger.warning("akshare未安装，跳过")
+                    continue
+                try:
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(self._fetch_from_akshare, code, market),
+                        timeout=30
+                    )
+                    if df is not None and not df.empty:
+                        logger.info(f"成功从AKShare获取 {code} 数据")
+                        return df
+                except Exception as e:
+                    logger.warning(f"AKShare获取失败: {e}")
+        
+        logger.warning(f"所有数据源均失败，使用模拟数据: {code}")
         return self._generate_mock_history(code)
     
     def _fetch_from_akshare(self, code: str, market: str) -> pd.DataFrame:

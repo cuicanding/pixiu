@@ -20,7 +20,21 @@ class Config:
     position_size: float = 0.95
     risk_free_rate: float = 0.03
 
+    regime_window_days: int = 60
+    regime_adx_threshold: float = 25.0
+    regime_slope_threshold: float = 0.005
+
     data_update_days: int = 30
+    data_source_priority: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.data_source_priority:
+            self.data_source_priority = {
+                "A股": ["baostock", "akshare", "mock"],
+                "港股": ["akshare", "mock"],
+                "美股": ["akshare", "mock"],
+                "index": ["baostock", "mock"],
+            }
 
     @property
     def base_dir(self) -> Path:
