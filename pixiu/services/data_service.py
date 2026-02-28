@@ -213,16 +213,29 @@ class DataService:
             raise ImportError("akshare not installed")
         
         if market == "A股":
-            df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="")
-            df = df.rename(columns={
-                '日期': 'trade_date',
-                '开盘': 'open',
-                '最高': 'high',
-                '最低': 'low',
-                '收盘': 'close',
-                '成交量': 'volume',
-                '成交额': 'amount',
-            })
+            if code.startswith("688"):
+                df = ak.stock_zh_kcb_daily(symbol=code)
+                df = df.rename(columns={
+                    'date': 'trade_date',
+                    'open': 'open',
+                    'high': 'high',
+                    'low': 'low',
+                    'close': 'close',
+                    'volume': 'volume',
+                })
+                if 'amount' not in df.columns:
+                    df['amount'] = df['close'] * df['volume']
+            else:
+                df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="")
+                df = df.rename(columns={
+                    '日期': 'trade_date',
+                    '开盘': 'open',
+                    '最高': 'high',
+                    '最低': 'low',
+                    '收盘': 'close',
+                    '成交量': 'volume',
+                    '成交额': 'amount',
+                })
         elif market == "港股":
             df = ak.stock_hk_hist(symbol=code, adjust="")
             df = df.rename(columns={
