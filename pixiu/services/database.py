@@ -13,6 +13,10 @@ class Database:
     def __init__(self, db_path: str = "data/stocks.db"):
         self.db_path = db_path
     
+    async def ensure_tables(self):
+        """Ensure tables exist, create if not."""
+        await self.create_tables()
+    
     async def create_tables(self):
         """创建数据库表"""
         async with aiosqlite.connect(self.db_path) as db:

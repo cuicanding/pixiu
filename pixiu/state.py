@@ -50,6 +50,7 @@ class State(rx.State):
         super().__init__(*args, **kwargs)
         self._load_strategies()
         self._load_settings()
+        self._db_initialized = False
     
     def _load_strategies(self):
         try:
@@ -70,6 +71,20 @@ class State(rx.State):
         self.initial_capital = getattr(config, 'initial_capital', 100000.0)
         self.commission_rate = getattr(config, 'commission_rate', 0.0003)
         self.position_size = getattr(config, 'position_size', 0.95)
+    
+    async def ensure_db_initialized(self):
+        """Ensure database tables exist."""
+        if self._db_initialized:
+            return
+        try:
+            from pathlib import Path
+            db_path = Path("data/stocks.db")
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            db = Database(str(db_path))
+            await db.ensure_tables()
+            self._db_initialized = True
+        except Exception as e:
+            self.error_message = f"数据库初始化失败: {str(e)}"
     
     def set_market_a(self):
         self.current_market = "A股"
@@ -133,6 +148,7 @@ class State(rx.State):
             self.selected_strategies = self.selected_strategies + [strategy_name]
     
     async def run_backtest(self):
+        await self.ensure_db_initialized()
         if not self.selected_stock or not self.selected_strategies:
             self.error_message = "请先选择股票和策略"
             yield
