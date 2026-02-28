@@ -173,6 +173,9 @@ class DataService:
                 if bs is None:
                     logger.warning("baostock未安装，跳过")
                     continue
+                if code.startswith("688"):
+                    logger.info(f"科创板股票 {code} 不支持Baostock，跳过")
+                    continue
                 try:
                     df = await asyncio.wait_for(
                         asyncio.to_thread(

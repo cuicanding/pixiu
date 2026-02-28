@@ -122,6 +122,10 @@ class State(rx.State):
         self._load_strategies()
         self._load_settings()
         self._update_date_range()
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        self.glm_api_key = os.getenv("GLM_API_KEY", "") or self.glm_api_key
     
     def _load_strategies(self):
         try:
