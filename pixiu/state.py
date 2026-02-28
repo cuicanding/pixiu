@@ -3,6 +3,7 @@
 import reflex as rx
 from typing import List, Dict
 from pathlib import Path
+import pandas as pd
 
 from pixiu.services.database import Database
 from pixiu.services.data_service import DataService
@@ -48,6 +49,8 @@ class State(rx.State):
     
     market_regime: str = "unknown"
     stock_regime: str = "unknown"
+    market_index_data: Dict = {}
+    using_mock_data: bool = False
     regime_analysis: Dict = {}
     combine_mode: str = "complementary"
     filter_threshold: int = 2
@@ -343,26 +346,71 @@ class State(rx.State):
     def clear_error(self):
         self.error_message = ""
     
+    async def _get_market_index_data(self) -> pd.DataFrame:
+        """Get market index data (上证指数 for A股, etc.)"""
+        from pixiu.services.data_service import DataService
+        db = Database("data/stocks.db")
+        data_service = DataService(db, use_mock=True)
+        
+        market_codes = {
+            "A股": "000001",  # 上证指数
+            "港股": "HSI",    # 恒生指数
+            "美股": "DJI",    # 道琼斯
+        }
+        code = market_codes.get(self.current_market, "000001")
+        return data_service._generate_mock_history(code)
+    
     async def analyze_regime(self):
-        """分析市场状态"""
+        """Analyze both market and stock regime"""
         from pixiu.analysis import MarketRegimeDetector
+        from pixiu.services.data_service import DataService
         
         self.is_loading = True
-        self.loading_message = "分析市场状态..."
+        self.loading_message = "分析市场和个股状态..."
+        self.error_message = ""
         yield
         
         try:
+            await self.ensure_db_initialized()
+            
+            db = Database("data/stocks.db")
+            data_service = DataService(db, use_mock=True)
+            detector = MarketRegimeDetector()
+            
+            # Analyze market index
+            market_df = await self._get_market_index_data()
+            if market_df is not None and not market_df.empty:
+                market_analysis = detector.get_analysis_detail(market_df)
+                self.market_regime = market_analysis["regime"]
+                self.market_index_data = market_analysis
+            
+            # Analyze selected stock
             if self.selected_stock:
-                db = Database("data/stocks.db")
-                data_service = DataService(db, use_mock=True)
                 df = await data_service.get_cached_data(self.selected_stock)
+                if df is None or df.empty:
+                    success, _ = await data_service.download_and_save(
+                        self.selected_stock,
+                        self.current_market
+                    )
+                    if success:
+                        df = await data_service.get_cached_data(self.selected_stock)
+                
                 if df is not None and not df.empty:
-                    detector = MarketRegimeDetector()
-                    self.regime_analysis = detector.get_analysis_detail(df)
-                    self.stock_regime = self.regime_analysis["regime"]
+                    stock_analysis = detector.get_analysis_detail(df)
+                    self.stock_regime = stock_analysis["regime"]
+                    self.regime_analysis = stock_analysis
+                    self.using_mock_data = True
+            
+            # Advance to strategy selection
+            self.current_step = self.STEP_STRATEGY
+            self.max_step = max(self.max_step, self.STEP_STRATEGY)
+            
+        except Exception as e:
+            self.error_message = f"择势分析失败: {str(e)}"
         finally:
             self.is_loading = False
-            yield
+            self.loading_message = ""
+        yield
 
     def set_combine_mode(self, mode: str):
         if mode in ["equal_weight", "signal_filter", "complementary"]:
