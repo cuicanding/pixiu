@@ -343,8 +343,10 @@ class State(rx.State):
             )
             
             from pixiu.strategies import get_strategy
+            from pixiu.services.chart_service import generate_backtest_chart
             
             total = len(self.selected_strategies)
+            self.backtest_charts = {}
             for i, strategy_name in enumerate(self.selected_strategies):
                 self.loading_message = f"回测策略: {strategy_name}"
                 self.progress = int((i / total) * 80) if total > 0 else 0
@@ -361,6 +363,18 @@ class State(rx.State):
                 result = engine.run(df_with_signals, df_with_signals['signal'])
                 
                 debug_log(f"[回测] 策略 {strategy_name} 完成: 收益={result.total_return:.2f}%, 夏普={result.sharpe_ratio:.2f}")
+                
+                try:
+                    chart_base64 = generate_backtest_chart(
+                        df_with_signals,
+                        result.trades,
+                        result.equity_curve,
+                        result.drawdown_curve
+                    )
+                    self.backtest_charts[strategy_name] = chart_base64
+                    debug_log(f"[回测] 策略 {strategy_name} 图表生成成功")
+                except Exception as chart_err:
+                    debug_log(f"[回测] 图表生成失败: {chart_err}")
                 
                 trades = []
                 for t in result.trades[:50]:

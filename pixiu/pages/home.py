@@ -611,6 +611,18 @@ def render_backtest_result(result: dict) -> rx.Component:
                 spacing="4",
             ),
             
+            rx.cond(
+                State.backtest_charts.contains(result["strategy"]),
+                rx.box(
+                    rx.image(
+                        src=f"data:image/png;base64,{State.backtest_charts[result['strategy']]}",
+                        width="100%",
+                        border_radius="md",
+                    ),
+                    margin_top="1rem",
+                ),
+            ),
+            
             spacing="3",
         ),
         padding="1rem",
