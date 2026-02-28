@@ -55,6 +55,94 @@ def format_timeline_text(timeline: Dict[str, Any]) -> str:
     return '\n'.join(lines)
 
 
+def segment_card(segment: Dict) -> rx.Component:
+    """渲染单个市场阶段卡片
+    
+    Args:
+        segment: 包含 regime, start_date, end_date, confidence 的字典
+        
+    Returns:
+        Reflex 组件
+    """
+    regime = segment.get('regime', 'unknown')
+    regime_text = REGIME_TEXT.get(regime, '未知')
+    regime_color = REGIME_COLORS.get(regime, '#6b7280')
+    regime_icon = "📈" if regime == "trend" else "📊" if regime == "range" else "❓"
+    start_date = segment.get('start_date', '?')
+    end_date = segment.get('end_date', '?')
+    confidence = segment.get('confidence', 0)
+    
+    return rx.box(
+        rx.hstack(
+            rx.box(regime_icon, font_size="1.5rem", padding_x="0.5rem"),
+            rx.vstack(
+                rx.hstack(
+                    rx.text(regime_text, font_weight="bold", font_size="1rem", color=regime_color),
+                    rx.text(f"{confidence:.0%}", font_size="0.75rem", color="#6b7280"),
+                    spacing="2",
+                    align="center",
+                ),
+                rx.text(f"{start_date} ~ {end_date}", font_size="0.75rem", color="#a0a0b0"),
+                spacing="1",
+                align="start",
+            ),
+            spacing="2",
+            align="center",
+            width="100%",
+        ),
+        padding="0.75rem",
+        border_radius="0.5rem",
+        bg="#1a1a24",
+        border_left=f"4px solid {regime_color}",
+        width="100%",
+    )
+
+
+def turning_point_card(tp: Dict) -> rx.Component:
+    """渲染单个转折点卡片
+    
+    Args:
+        tp: 包含 date, from, to, trigger 的字典
+        
+    Returns:
+        Reflex 组件
+    """
+    date = tp.get('date', '?')
+    from_regime = tp.get('from', 'unknown')
+    to_regime = tp.get('to', 'unknown')
+    trigger = tp.get('trigger', '未知原因')
+    
+    from_text = REGIME_TEXT.get(from_regime, '未知')
+    to_text = REGIME_TEXT.get(to_regime, '未知')
+    to_color = REGIME_COLORS.get(to_regime, '#6b7280')
+    
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.text("⚡", font_size="1rem"),
+                rx.text(date, font_weight="bold", font_size="0.875rem"),
+                spacing="1",
+                align="center",
+            ),
+            rx.hstack(
+                rx.text(from_text, color="#6b7280", font_size="0.75rem"),
+                rx.text("→", color="#6b7280", font_size="0.75rem"),
+                rx.text(to_text, color=to_color, font_weight="bold", font_size="0.75rem"),
+                spacing="1",
+                align="center",
+            ),
+            rx.text(f"触发: {trigger}", font_size="0.7rem", color="#6b7280"),
+            spacing="1",
+            align="start",
+        ),
+        padding="0.75rem",
+        border_radius="0.5rem",
+        bg="#1f1f2e",
+        border="1px solid #2a2a3a",
+        width="100%",
+    )
+
+
 def timeline_view(timeline: Dict[str, Any]) -> rx.Component:
     """时间线择势可视化主组件
     
@@ -79,81 +167,8 @@ def timeline_view(timeline: Dict[str, Any]) -> rx.Component:
         ) if current else rx.box()
     )
     
-    segment_items = []
-    for seg in segments:
-        regime = seg.get('regime', 'unknown')
-        regime_text = REGIME_TEXT.get(regime, '未知')
-        regime_color = REGIME_COLORS.get(regime, '#6b7280')
-        regime_icon = "📈" if regime == "trend" else "📊" if regime == "range" else "❓"
-        start_date = seg.get('start_date', '?')
-        end_date = seg.get('end_date', '?')
-        confidence = seg.get('confidence', 0)
-        
-        segment_items.append(
-            rx.box(
-                rx.hstack(
-                    rx.box(regime_icon, font_size="1.5rem", padding_x="0.5rem"),
-                    rx.vstack(
-                        rx.hstack(
-                            rx.text(regime_text, font_weight="bold", font_size="1rem", color=regime_color),
-                            rx.text(f"{confidence:.0%}", font_size="0.75rem", color="#6b7280"),
-                            spacing="2",
-                            align="center",
-                        ),
-                        rx.text(f"{start_date} ~ {end_date}", font_size="0.75rem", color="#a0a0b0"),
-                        spacing="1",
-                        align="start",
-                    ),
-                    spacing="2",
-                    align="center",
-                    width="100%",
-                ),
-                padding="0.75rem",
-                border_radius="0.5rem",
-                bg="#1a1a24",
-                border_left=f"4px solid {regime_color}",
-                width="100%",
-            )
-        )
-    
-    tp_items = []
-    for tp in turning_points:
-        date = tp.get('date', '?')
-        from_regime = tp.get('from', 'unknown')
-        to_regime = tp.get('to', 'unknown')
-        trigger = tp.get('trigger', '未知原因')
-        
-        from_text = REGIME_TEXT.get(from_regime, '未知')
-        to_text = REGIME_TEXT.get(to_regime, '未知')
-        to_color = REGIME_COLORS.get(to_regime, '#6b7280')
-        
-        tp_items.append(
-            rx.box(
-                rx.vstack(
-                    rx.hstack(
-                        rx.text("⚡", font_size="1rem"),
-                        rx.text(date, font_weight="bold", font_size="0.875rem"),
-                        spacing="1",
-                        align="center",
-                    ),
-                    rx.hstack(
-                        rx.text(from_text, color="#6b7280", font_size="0.75rem"),
-                        rx.text("→", color="#6b7280", font_size="0.75rem"),
-                        rx.text(to_text, color=to_color, font_weight="bold", font_size="0.75rem"),
-                        spacing="1",
-                        align="center",
-                    ),
-                    rx.text(f"触发: {trigger}", font_size="0.7rem", color="#6b7280"),
-                    spacing="1",
-                    align="start",
-                ),
-                padding="0.75rem",
-                border_radius="0.5rem",
-                bg="#1f1f2e",
-                border="1px solid #2a2a3a",
-                width="100%",
-            )
-        )
+    segment_items = [segment_card(seg) for seg in segments]
+    tp_items = [turning_point_card(tp) for tp in turning_points]
     
     has_data = len(segments) > 0 or len(turning_points) > 0
     
