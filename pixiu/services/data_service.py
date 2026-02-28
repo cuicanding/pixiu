@@ -258,6 +258,11 @@ class DataService:
         lg = None
         try:
             lg = bs.login()
+            if lg is None or lg.error_code != '0':
+                error_msg = "登录失败" if lg is None else f"登录失败: {lg.error_msg}"
+                logger.error(f"baostock {error_msg}")
+                return pd.DataFrame()
+            
             rs = bs.query_history_k_data_plus(
                 bs_code,
                 "date,code,open,high,low,close,volume,amount",
@@ -266,6 +271,10 @@ class DataService:
                 frequency="d",
                 adjustflag="3"
             )
+            
+            if rs is None:
+                logger.error(f"baostock查询返回None: {code}")
+                return pd.DataFrame()
             
             data_list = []
             while (rs.error_code == '0') and rs.next():
