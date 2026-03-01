@@ -460,10 +460,20 @@ class DataService:
             logger.error(f"下载保存数据失败: {e}")
             return False, 0
     
-    async def get_cached_data(self, code: str) -> pd.DataFrame:
-        """获取缓存的数据"""
+    async def get_cached_data(self, code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
+        """获取缓存的数据
+        
+        Args:
+            code: 股票代码
+            start_date: 起始日期（可选），格式 YYYY-MM-DD
+            end_date: 结束日期（可选），格式 YYYY-MM-DD
+            
+        Returns:
+            DataFrame，如果缓存不足则返回空 DataFrame
+        """
         quotes = await self.db.get_quotes(code)
         if not quotes:
+            logger.debug(f"[缓存] {code} 无缓存数据")
             return pd.DataFrame()
         
         df = pd.DataFrame([
@@ -479,4 +489,32 @@ class DataService:
             for q in quotes
         ])
         df['trade_date'] = pd.to_datetime(df['trade_date'])
-        return df.set_index('trade_date')
+        df = df.sort_values('trade_date')
+        
+        # 检查缓存的日期范围是否覆盖需求
+        if start_date or end_date:
+            cache_start = df['trade_date'].min()
+            cache_end = df['trade_date'].max()
+            
+            if start_date:
+                req_start = pd.to_datetime(start_date)
+                if cache_start > req_start:
+                    logger.debug(f"[缓存] {code} 缓存起始日期 {cache_start.date()} 晚于需求 {start_date}，需要更新")
+                    return pd.DataFrame()
+            
+            if end_date:
+                req_end = pd.to_datetime(end_date)
+                # 容忍3天的延迟（考虑周末/节假日）
+                if (req_end - cache_end).days > 3:
+                    logger.debug(f"[缓存] {code} 缓存结束日期 {cache_end.date()} 早于需求 {end_date}，需要更新")
+                    return pd.DataFrame()
+        
+        logger.info(f"[缓存] {code} 命中缓存，共 {len(df)} 条数据，范围 {df['trade_date'].min().date()} 至 {df['trade_date'].max().date()}")
+        
+        # 如果指定了日期范围，过滤数据
+        if start_date:
+            df = df[df['trade_date'] >= pd.to_datetime(start_date)]
+        if end_date:
+            df = df[df['trade_date'] <= pd.to_datetime(end_date)]
+        
+        return df

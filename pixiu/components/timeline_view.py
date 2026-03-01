@@ -15,19 +15,35 @@ REGIME_TEXT = {
     "unknown": "未知",
 }
 
+DIRECTION_COLORS = {
+    "up": "#22c55e",
+    "down": "#ef4444",
+    "neutral": "#6b7280",
+}
+
 
 class TimelineSegment(TypedDict):
+    index: int
     start: str
     end: str
     regime: str
+    direction: str
     duration: int
 
 
 class TurningPoint(TypedDict):
+    index: int
     date: str
     from_regime: str
     to_regime: str
+    to_direction: str
     triggers: Dict[str, Any]
+    confidence: float
+    total_score: int
+    score_details: Dict[str, int]
+    key_indicators: List[str]
+    indicators: Dict[str, Any]
+    resonance: Dict[str, bool]
 
 
 class RegimeTimeline(TypedDict, total=False):
@@ -75,25 +91,46 @@ def format_timeline_text(timeline: Dict[str, Any]) -> str:
     return '\n'.join(lines)
 
 
-def segment_card(segment: Dict) -> rx.Component:
+def segment_card(segment: Dict, index: int) -> rx.Component:
     """渲染单个市场阶段卡片
     
     Args:
         segment: 包含 regime, start, end, duration 的字典
+        index: 段序号（从1开始）
         
     Returns:
         Reflex 组件
     """
     regime = segment['regime']
+    direction = segment.get('direction', 'neutral')
+    
+    # 方向箭头和颜色
+    direction_icon = rx.cond(
+        direction == "up", "↑",
+        rx.cond(direction == "down", "↓", "→")
+    )
+    direction_color = rx.cond(
+        direction == "up", "#22c55e",
+        rx.cond(direction == "down", "#ef4444", "#6b7280")
+    )
     
     return rx.box(
         rx.hstack(
-            rx.text(
-                rx.cond(regime == "trend", "📈", 
-                    rx.cond(regime == "range", "📊", "❓")
+            rx.vstack(
+                rx.badge(
+                    f"区间{index}",
+                    color_scheme=rx.cond(regime == "trend", "green", "yellow"),
+                    variant="outline",
+                    font_size="0.7rem",
                 ),
-                font_size="1.5rem",
-                padding_x="0.5rem"
+                rx.text(
+                    direction_icon,
+                    font_size="1.2rem",
+                    color=direction_color,
+                    font_weight="bold",
+                ),
+                spacing="1",
+                align="center",
             ),
             rx.vstack(
                 rx.hstack(
@@ -115,7 +152,7 @@ def segment_card(segment: Dict) -> rx.Component:
                 spacing="1",
                 align="start",
             ),
-            spacing="2",
+            spacing="3",
             align="center",
             width="100%",
         ),
@@ -129,70 +166,76 @@ def segment_card(segment: Dict) -> rx.Component:
     )
 
 
-def turning_point_card(tp: Dict) -> rx.Component:
-    """渲染单个转折点卡片
+def turning_point_card(tp: Dict, index: int) -> rx.Component:
+    """渲染单个转折点卡片（带序号）
     
     Args:
-        tp: 包含 date, from_regime, to_regime, triggers 的字典
+        tp: 包含 date, from_direction, to_direction, strength 等的字典
+        index: 转折点序号（从1开始）
         
     Returns:
         Reflex 组件
     """
-    to_regime = tp['to_regime']
-    triggers = tp['triggers']
+    to_direction = tp.get('to_direction', 'neutral')
+    from_direction = tp.get('from_direction', 'neutral')
+    to_strength = tp.get('to_strength', 5)
+    prev_duration = tp.get('prev_duration', 0)
+    reason = tp.get('reason', '')
     
     return rx.box(
         rx.vstack(
+            # 第一行：序号 + 日期 + 方向变化
             rx.hstack(
-                rx.text("⚡", font_size="1rem"),
-                rx.text(f"{tp['date']}", font_weight="bold", font_size="0.875rem"),
-                spacing="1",
-                align="center",
-            ),
-            rx.hstack(
-                rx.text(
-                    rx.cond(tp['from_regime'] == "trend", "趋势",
-                        rx.cond(tp['from_regime'] == "range", "震荡", "未知")
-                    ),
-                    color="#6b7280",
-                    font_size="0.75rem"
-                ),
-                rx.text("→", color="#6b7280", font_size="0.75rem"),
-                rx.text(
-                    rx.cond(to_regime == "trend", "趋势",
-                        rx.cond(to_regime == "range", "震荡", "未知")
-                    ),
-                    color=rx.cond(to_regime == "trend", "#10b981",
-                        rx.cond(to_regime == "range", "#f59e0b", "#6b7280")
-                    ),
+                rx.badge(
+                    f"T{index}",
+                    color_scheme="cyan",
+                    variant="solid",
+                    font_size="0.875rem",
                     font_weight="bold",
-                    font_size="0.75rem"
                 ),
-                spacing="1",
-                align="center",
-            ),
-            rx.hstack(
-                rx.text("触发: ", font_size="0.7rem", color="#6b7280"),
+                rx.text(f"{tp.get('date', '')}", font_weight="bold", font_size="0.875rem"),
+                # 方向变化
                 rx.text(
-                    rx.cond(triggers['adx_cross_up'], "ADX突破25",
-                        rx.cond(triggers['adx_cross_down'], "ADX跌破25",
-                            rx.cond(triggers['slope_increase'], "斜率增大",
-                                rx.cond(triggers['slope_decrease'], "斜率减小", "市场结构变化")
-                            )
-                        )
-                    ),
-                    font_size="0.7rem",
-                    color="#6b7280"
+                    rx.cond(from_direction == "up", "上涨", "下跌"),
+                    color=rx.cond(from_direction == "up", "#ef4444", "#22c55e"),
+                    font_weight="bold", 
+                    font_size="0.875rem"
                 ),
-                spacing="0",
+                rx.text("→", color="#6b7280", font_size="0.875rem"),
+                rx.text(
+                    rx.cond(to_direction == "up", "上涨", "下跌"),
+                    color=rx.cond(to_direction == "up", "#ef4444", "#22c55e"),
+                    font_weight="bold", 
+                    font_size="0.875rem"
+                ),
+                rx.spacer(),
+                rx.hstack(
+                    rx.text("强度:", font_size="0.7rem", color="#6b7280"),
+                    rx.text(f"{to_strength}/10", font_size="0.75rem", font_weight="bold"),
+                    spacing="1",
+                ),
+                rx.hstack(
+                    rx.text("转折前:", font_size="0.7rem", color="#6b7280"),
+                    rx.text(f"{prev_duration}天", font_size="0.75rem", color="#a0a0b0"),
+                    spacing="1",
+                ),
+                spacing="2",
+                align="center",
+                width="100%",
             ),
-            spacing="1",
+            # 第二行：转折理由
+            rx.hstack(
+                rx.text("信号:", font_size="0.7rem", color="#6b7280"),
+                rx.text(reason, font_size="0.75rem", color="#a0a0b0"),
+                spacing="1",
+            ),
+            spacing="2",
             align="start",
         ),
         padding="0.75rem",
         border_radius="0.5rem",
         bg="#1f1f2e",
-        border="1px solid #2a2a3a",
+        border=rx.cond(to_direction == "up", "1px solid #ef4444", "1px solid #22c55e"),
         width="100%",
     )
 
@@ -209,35 +252,70 @@ def timeline_view(timeline: Dict[str, Any]) -> rx.Component:
     Returns:
         Reflex 组件
     """
+    segments = timeline.get('segments', [])
+    turning_points = timeline.get('turning_points', [])
+    
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.text("📅 市场择势时间线", font_size="1.25rem", font_weight="bold"),
+                rx.text("📅 择势转折点详情", font_size="1.25rem", font_weight="bold"),
                 rx.spacer(),
+                # 转折点数量badge
+                rx.cond(
+                    turning_points,
+                    rx.badge(
+                        rx.text("个转折点", font_size="xs"),
+                        color_scheme="cyan",
+                        variant="outline",
+                    ),
+                    rx.badge("暂无转折点", color_scheme="gray", variant="outline"),
+                ),
             ),
             rx.divider(),
             
-            # 市场阶段
-            rx.vstack(
-                rx.text("市场阶段", font_size="0.875rem", color="#a0a0b0", font_weight="bold"),
-                rx.foreach(
-                    timeline["segments"],
-                    segment_card,
+            # 第一个阶段信息（简化版，不用Python if判断）
+            # 核心概念：趋势有方向，震荡无方向
+            rx.cond(
+                segments,
+                rx.box(
+                    rx.hstack(
+                        rx.text("初始阶段:", font_size="0.75rem", color="#6b7280"),
+                        rx.text(
+                            rx.cond(
+                                segments[0].get('regime') == "trend",
+                                rx.cond(segments[0].get('direction') == "up", "上涨趋势",
+                                       rx.cond(segments[0].get('direction') == "down", "下跌趋势", "趋势")),
+                                rx.cond(segments[0].get('regime') == "range", "震荡", "未知")
+                            ),
+                            font_weight="bold",
+                            font_size="0.875rem",
+                        ),
+                        rx.text("持续", font_size="0.75rem", color="#a0a0b0"),
+                        rx.text(segments[0].get('duration', 0), font_size="0.75rem", color="#a0a0b0"),
+                        rx.text("天", font_size="0.75rem", color="#a0a0b0"),
+                        spacing="2",
+                        align="center",
+                    ),
+                    padding="0.5rem 0.75rem",
+                    bg="#1a1a24",
+                    border_radius="0.5rem",
+                    margin_bottom="0.5rem",
                 ),
-                spacing="2",
-                width="100%",
+                rx.box(),
             ),
             
-            # 转折点
-            rx.vstack(
-                rx.text("转折点", font_size="0.875rem", color="#a0a0b0", font_weight="bold"),
-                rx.foreach(
-                    timeline["turning_points"],
-                    turning_point_card,
+            # 转折点表格
+            rx.cond(
+                turning_points,
+                rx.vstack(
+                    rx.foreach(
+                        turning_points,
+                        lambda tp: turning_point_card(tp, tp.get('index', 1)),
+                    ),
+                    spacing="2",
+                    width="100%",
                 ),
-                spacing="2",
-                width="100%",
-                margin_top="1rem",
+                rx.text("暂无转折点数据", font_size="0.875rem", color="#6b7280"),
             ),
             
             spacing="4",

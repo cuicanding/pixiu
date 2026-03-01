@@ -10,17 +10,31 @@ from datetime import datetime, timedelta
 
 
 class TimelineSegment(TypedDict):
+    index: int
     start: str
     end: str
     regime: str
+    direction: str
     duration: int
 
 
 class TurningPoint(TypedDict):
+    index: int
     date: str
+    from_direction: str
+    to_direction: str
+    from_strength: int  # 前一阶段强度
+    to_strength: int    # 当前阶段强度
+    prev_duration: int  # 转折前天数
+    confidence: float
+    confidence_pct: float
+    total_score: int
+    key_indicators: List[str]
+    reason: str  # 转折理由
+    indicators: Dict[str, Any]
+    # 兼容旧字段
     from_regime: str
     to_regime: str
-    triggers: Dict[str, Any]
 
 
 class RegimeTimeline(TypedDict, total=False):
@@ -120,10 +134,20 @@ class State(rx.State):
     filter_threshold: int = 2
     regime_chart: str = ""
     market_chart: str = ""
+    regime_chart_option: Dict[str, Any] = {}  # 个股时间线 ECharts option dict
     _db_initialized: bool = False
     
     regime_timeline: RegimeTimeline = {"segments": [], "turning_points": [], "current": {}}
     timeline_loading: bool = False
+
+    # 个股时间线 ECharts 可视化所需数据
+    stock_ohlcv: List[Dict] = []
+    stock_timeline_segments: List[Dict] = []
+    stock_turning_points: List[Dict] = []
+    
+    # 大盘时间线数据
+    market_timeline: RegimeTimeline = {"segments": [], "turning_points": [], "current": {}}
+    market_turning_points: List[Dict] = []
     
     explain_modal_open: bool = False
     current_explanation: str = ""
@@ -137,6 +161,19 @@ class State(rx.State):
     custom_end_date: str = ""
     backtest_start_date: str = ""
     backtest_end_date: str = ""
+
+    # 实验 / 规则发现相关状态
+    experiment_train_start: str = ""
+    experiment_train_end: str = ""
+    experiment_val_start: str = ""
+    experiment_val_end: str = ""
+
+    regime_combo_stats: Dict[str, Dict] = {}
+    regime_combo_best_strategies: Dict[str, Dict] = {}
+    train_backtest_results: Dict[str, Dict] = {}
+    val_backtest_results: Dict[str, Dict] = {}
+    rule_explanations: Dict[str, str] = {}
+    validation_report: str = ""
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -486,6 +523,10 @@ class State(rx.State):
             self.loading_message = ""
         yield
     
+    def get_regime_combo_key(self, market_regime: str, stock_regime: str) -> str:
+        """组合大盘/个股择势为键，便于统计与映射。"""
+        return f"{market_regime}_{stock_regime}"
+
     async def generate_ai_report(self):
         if not self.glm_api_key:
             self.error_message = "请先在设置中配置 GLM API Key"
@@ -611,10 +652,32 @@ CACHE_DIR=data/cache
             
             db = Database("data/stocks.db")
             data_service = DataService(db, use_mock=False)
-            detector = MarketRegimeDetector()
-            timeline_analyzer = RegimeTimelineAnalyzer(window=self._get_regime_window())
             
-            # 获取大盘真实数据
+            # 大盘检测器：低阈值、更平滑
+            # 大盘波动率较低，ADX通常在10-30范围，使用低阈值识别趋势
+            market_detector = MarketRegimeDetector(
+                adx_trend_threshold=12.0,  # 大盘ADX阈值较低（实测ADX在10-30）
+                slope_threshold=0.0005,  # 大盘斜率阈值0.05%
+                trend_score_threshold=5,  # 大盘趋势门槛5分（提高到5以更好识别震荡）
+            )
+            # 个股检测器：中等阈值、更灵敏
+            # 个股波动率较高但ADX可能很低，实测ADX在3-15范围
+            # 使用更短的MACD周期适应30天窗口
+            stock_detector = MarketRegimeDetector(
+                adx_trend_threshold=8.0,  # 个股ADX阈值更低（实测ADX很低）
+                slope_threshold=0.001,  # 个股斜率阈值0.1%
+                trend_score_threshold=6,  # 个股趋势门槛6分（提高到6以更好识别震荡）
+                macd_fast=8,  # 更短的MACD周期
+                macd_slow=17,
+                macd_signal=6,
+            )
+            
+            # 大盘用更大窗口（60天），趋势更稳定、转折点更少
+            market_timeline_analyzer = RegimeTimelineAnalyzer(window=60, min_duration=15, min_change_pct=0.05, detector=market_detector)
+            # 个股用更小窗口（30天），响应更快、转折点更多
+            stock_timeline_analyzer = RegimeTimelineAnalyzer(window=30, min_duration=7, min_change_pct=0.05, detector=stock_detector)
+            
+            # 获取大盘真实数据（也使用缓存）
             debug_log(f"[择势分析] 获取大盘指数数据...")
             market_codes = {"A股": "000001", "港股": "HSI", "美股": "DJI"}
             market_code = market_codes.get(self.current_market, "000001")
@@ -622,18 +685,56 @@ CACHE_DIR=data/cache
             self.loading_message = f"获取大盘数据 ({market_code})..."
             yield
             
-            market_df = await data_service.fetch_stock_history(
-                market_code, 
-                self.current_market if self.current_market != "A股" else "index",
-                self.backtest_start_date,
-                self.backtest_end_date
-            )
+            # 尝试从缓存获取大盘数据
+            # 大盘使用2年数据（约500天），不受时间范围限制，因为大盘需要更长时间跨度识别趋势
+            market_df = await data_service.get_cached_data(market_code)
+            
+            # 只使用最近2年数据
+            if market_df is not None and len(market_df) > 500:
+                market_df = market_df.tail(500)
+                debug_log(f"[择势分析] 大盘数据截取最近2年: {len(market_df)} 条")
+            
+            if market_df is None or (hasattr(market_df, 'empty') and market_df.empty):
+                debug_log("[择势分析] 大盘缓存不足，下载并缓存...")
+                try:
+                    success, count = await data_service.download_and_save(
+                        market_code,
+                        self.current_market if self.current_market != "A股" else "index",
+                    )
+                    if success:
+                        debug_log(f"[择势分析] 成功下载并缓存大盘数据 {count} 条")
+                        market_df = await data_service.get_cached_data(
+                            market_code,
+                            start_date=self.backtest_start_date,
+                            end_date=self.backtest_end_date
+                        )
+                except Exception as e:
+                    debug_log(f"[择势分析] 下载大盘数据失败: {e}")
+                    market_df = None
+            else:
+                debug_log(f"[择势分析] 使用大盘缓存数据，共 {len(market_df)} 条")
+            
+            # 如果缓存失败，回退到直接拉取
+            if market_df is None or (hasattr(market_df, 'empty') and market_df.empty):
+                market_df = await data_service.fetch_stock_history(
+                    market_code, 
+                    self.current_market if self.current_market != "A股" else "index",
+                    self.backtest_start_date,
+                    self.backtest_end_date
+                )
             
             if market_df is not None and not market_df.empty:
-                market_analysis = detector.get_analysis_detail(market_df)
+                market_analysis = market_detector.get_analysis_detail(market_df)
                 self.market_regime = market_analysis["regime"]
                 self.market_index_data = market_analysis
-                debug_log(f"[择势分析] 大盘状态: {self.market_regime}, ADX: {market_analysis.get('adx'):.2f}")
+                debug_log(f"[择势分析] 大盘状态: {self.market_regime}, ADX: {market_analysis.get('adx', 0):.2f}")
+                
+                # 大盘时间线分析（使用大盘专用分析器）
+                market_timeline = market_timeline_analyzer.analyze_timeline(market_df)
+                market_segments = market_timeline.get("segments", [])
+                self.market_timeline = market_timeline  # 保存大盘时间线数据
+                self.market_turning_points = market_timeline.get("turning_points", [])  # 保存大盘转折点
+                debug_log(f"[择势分析] 大盘时间线分段: {len(market_segments)} 个，转折点: {len(self.market_turning_points)} 个")
                 
                 # 生成大盘图表
                 try:
@@ -644,10 +745,11 @@ CACHE_DIR=data/cache
             else:
                 debug_log("[择势分析] 大盘数据获取失败，使用模拟数据")
                 market_df = data_service._generate_mock_history(market_code)
-                market_analysis = detector.get_analysis_detail(market_df)
+                market_analysis = market_detector.get_analysis_detail(market_df)
                 self.market_regime = market_analysis["regime"]
                 self.market_index_data = market_analysis
                 self.using_mock_data = True
+                market_segments = []
             
             # 获取个股数据
             debug_log(f"[择势分析] 分析个股: {self.selected_stock}")
@@ -655,16 +757,47 @@ CACHE_DIR=data/cache
             yield
             
             if self.selected_stock:
-                df = await data_service.fetch_stock_history(
-                    self.selected_stock, 
-                    self.current_market,
-                    self.backtest_start_date,
-                    self.backtest_end_date
+                # 优先使用本地缓存，传入日期范围判断缓存是否足够
+                df = await data_service.get_cached_data(
+                    self.selected_stock,
+                    start_date=self.backtest_start_date,
+                    end_date=self.backtest_end_date
                 )
+
+                if df is None or (hasattr(df, 'empty') and df.empty):
+                    debug_log("[择势分析] 缓存不足或无数据，下载并缓存...")
+                    try:
+                        success, count = await data_service.download_and_save(
+                            self.selected_stock,
+                            self.current_market,
+                        )
+                        if success:
+                            debug_log(f"[择势分析] 成功下载并缓存 {count} 条数据")
+                            df = await data_service.get_cached_data(
+                                self.selected_stock,
+                                start_date=self.backtest_start_date,
+                                end_date=self.backtest_end_date
+                            )
+                    except Exception as e:
+                        debug_log(f"[择势分析] 下载并缓存个股数据失败: {e}")
+                        df = pd.DataFrame()
+
+                # 如果缓存仍然为空，兜底回退到直接拉取历史数据
+                if df is None or (hasattr(df, 'empty') and df.empty):
+                    debug_log("[择势分析] 缓存与下载均失败，回退到直接拉取历史数据")
+                    df = await data_service.fetch_stock_history(
+                        self.selected_stock,
+                        self.current_market,
+                        self.backtest_start_date,
+                        self.backtest_end_date,
+                    )
+                else:
+                    debug_log(f"[择势分析] 使用缓存数据，共 {len(df)} 条")
+
                 debug_log(f"[择势分析] 获取到数据: {len(df) if df is not None and not df.empty else 0} 条")
                 
                 if df is not None and not df.empty:
-                    stock_analysis = detector.get_analysis_detail(df)
+                    stock_analysis = stock_detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
                     
@@ -675,22 +808,317 @@ CACHE_DIR=data/cache
                     except Exception as e:
                         debug_log(f"[择势分析] 个股图表生成失败: {e}")
                     
-                    # 时间线择势分析
+                    # 时间线择势分析（使用个股专用分析器）
                     try:
                         self.timeline_loading = True
-                        self.regime_timeline = timeline_analyzer.analyze_timeline(df)
+                        self.regime_timeline = stock_timeline_analyzer.analyze_timeline(df)
                         debug_log(f"[择势分析] 时间线分析完成: {len(self.regime_timeline.get('segments', []))} 个阶段")
+                        
+                        # 打印详细的 segments 信息，检查 direction 字段
+                        segments_detail = [(s.get('regime'), s.get('direction'), s.get('start'), s.get('end')) for s in self.regime_timeline.get('segments', [])]
+                        debug_log(f"[择势分析] 个股时间线分段详情: {segments_detail}")
+
+                        # 为 ECharts 组件准备个股时间线数据
+                        self.stock_ohlcv = [
+                            {
+                                "date": str(row.get("trade_date", "")),
+                                "open": float(row.get("open", 0)),
+                                "high": float(row.get("high", 0)),
+                                "low": float(row.get("low", 0)),
+                                "close": float(row.get("close", 0)),
+                            }
+                            for _, row in df.iterrows()
+                        ]
+                        self.stock_timeline_segments = self.regime_timeline.get("segments", [])
+                        self.stock_turning_points = self.regime_timeline.get("turning_points", [])
+
+                        # 构造两个独立图表的 ECharts option
+                        import json as _json
+                        dates = [item["date"] for item in self.stock_ohlcv]
+                        stock_closes = [item["close"] for item in self.stock_ohlcv]
+                        
+                        # 获取大盘数据
+                        market_closes = []
+                        market_dates = []
+                        if market_df is not None and not market_df.empty:
+                            market_dates = [str(row.get("trade_date", "")) for _, row in market_df.iterrows()]
+                            market_closes = [float(row.get("close", 0)) for _, row in market_df.iterrows()]
+                        
+                        # 个股：构建 markArea（择势背景带）
+                        stock_mark_areas = []
+                        for seg_idx, seg in enumerate(self.stock_timeline_segments, 1):  # 从1开始编号
+                            regime = seg.get("regime", "range")
+                            direction = seg.get("direction", "neutral")
+                            
+                            # 颜色规则：红色上涨、绿色下跌、黄色震荡（使用 rgba 直接设置透明度）
+                            if regime == "trend":
+                                if direction == "down":
+                                    color = "rgba(34, 197, 94, 0.35)"  # 绿色，透明度0.35
+                                else:
+                                    color = "rgba(239, 68, 68, 0.35)"  # 红色，透明度0.35
+                            else:
+                                color = "rgba(245, 158, 11, 0.35)"  # 黄色，透明度0.35
+                            
+                            # 标签使用区间序号
+                            label = f"区间{seg_idx}"
+                            
+                            # ECharts markArea 格式：每个区间是 [起点对象, 终点对象]
+                            stock_mark_areas.append([
+                                {"xAxis": str(seg["start"]), "name": label, "itemStyle": {"color": color}},
+                                {"xAxis": str(seg["end"])},
+                            ])
+                        
+                        # 转折点：显示所有转折点（不跳过），确保覆盖完整
+                        key_turning_points = []
+                        if self.stock_turning_points:
+                            for tp_idx, tp in enumerate(self.stock_turning_points, 1):  # 从1开始编号
+                                tp_date = str(tp.get("date", ""))
+                                
+                                # 容错处理：日期格式可能不完全匹配，尝试多种匹配方式
+                                idx = None
+                                if tp_date in dates:
+                                    idx = dates.index(tp_date)
+                                else:
+                                    # 尝试截取日期部分匹配
+                                    tp_date_short = tp_date[:10] if len(tp_date) > 10 else tp_date
+                                    for i, d in enumerate(dates):
+                                        d_short = str(d)[:10] if len(str(d)) > 10 else str(d)
+                                        if d_short == tp_date_short:
+                                            idx = i
+                                            break
+                                
+                                if idx is not None:
+                                    from_regime = tp.get("from_regime", "")
+                                    to_regime = tp.get("to_regime", "")
+                                    triggers = tp.get("triggers", {})
+                                    key_indicators = tp.get("key_indicators", [])
+                                    
+                                    # 根据转折类型选颜色
+                                    if "trend" in to_regime:
+                                        point_color = "#ef4444" if "up" in str(tp.get("to_direction", "")) else "#22c55e"
+                                    else:
+                                        point_color = "#f59e0b"
+                                    
+                                    # 构造指标说明（使用新的key_indicators）
+                                    if key_indicators:
+                                        trigger_text = " ".join(key_indicators[:2])  # 最多2个
+                                    else:
+                                        trigger_text = "趋势转换"
+                                    
+                                    key_turning_points.append({
+                                        "name": trigger_text,
+                                        "coord": [dates[idx], stock_closes[idx]],
+                                        "value": f"T{tp_idx}",  # 使用T+序号
+                                        "itemStyle": {"color": point_color},
+                                        "label": {
+                                            "show": True,
+                                            "formatter": f"T{tp_idx}",  # 使用T+序号
+                                            "position": "top",
+                                            "color": "#fff",
+                                            "fontSize": 10
+                                        }
+                                    })
+                        
+                        # 大盘：构建择势背景
+                        market_mark_areas = []
+                        for seg_idx, seg in enumerate(market_segments, 1):  # 从1开始编号
+                            regime = seg.get("regime", "range")
+                            direction = seg.get("direction", "neutral")
+                            
+                            # 颜色规则：红色上涨、绿色下跌、黄色震荡（使用 rgba 直接设置透明度）
+                            if regime == "trend":
+                                if direction == "down":
+                                    color = "rgba(34, 197, 94, 0.35)"  # 绿色，透明度0.35
+                                else:
+                                    color = "rgba(239, 68, 68, 0.35)"  # 红色，透明度0.35
+                            else:
+                                color = "rgba(245, 158, 11, 0.35)"  # 黄色，透明度0.35
+                            
+                            # 标签使用区间序号
+                            label = f"区间{seg_idx}"
+                            
+                            # ECharts markArea 格式：每个区间是 [起点对象, 终点对象]
+                            market_mark_areas.append([
+                                {"xAxis": str(seg["start"]), "name": label, "itemStyle": {"color": color}},
+                                {"xAxis": str(seg["end"])},
+                            ])
+                        
+                        # 大盘转折点标记
+                        market_turning_points_data = []
+                        if self.market_turning_points:
+                            for tp_idx, tp in enumerate(self.market_turning_points, 1):
+                                tp_date = str(tp.get("date", ""))
+                                
+                                # 容错处理：日期格式匹配
+                                idx = None
+                                if tp_date in market_dates:
+                                    idx = market_dates.index(tp_date)
+                                else:
+                                    tp_date_short = tp_date[:10] if len(tp_date) > 10 else tp_date
+                                    for i, d in enumerate(market_dates):
+                                        d_short = str(d)[:10] if len(str(d)) > 10 else str(d)
+                                        if d_short == tp_date_short:
+                                            idx = i
+                                            break
+                                
+                                if idx is not None:
+                                    to_regime = tp.get("to_regime", "")
+                                    to_direction = tp.get("to_direction", "")
+                                    
+                                    # 根据转折类型选颜色
+                                    if "trend" in to_regime:
+                                        point_color = "#ef4444" if "up" in str(to_direction) else "#22c55e"
+                                    else:
+                                        point_color = "#f59e0b"
+                                    
+                                    market_turning_points_data.append({
+                                        "name": f"T{tp_idx}",
+                                        "coord": [market_dates[idx], market_closes[idx]],
+                                        "value": f"T{tp_idx}",
+                                        "itemStyle": {"color": point_color},
+                                        "label": {
+                                            "show": True,
+                                            "formatter": f"T{tp_idx}",
+                                            "position": "top",
+                                            "color": "#fff",
+                                            "fontSize": 10
+                                        }
+                                    })
+                        
+                        # 图1：大盘指数（加上择势背景和转折点）
+                        market_option = {
+                            "title": {
+                                "text": "大盘指数择势时间线",
+                                "left": "center",
+                                "textStyle": {"color": "#fff", "fontSize": 14}
+                            },
+                            "tooltip": {"trigger": "axis"},
+                            "grid": {"left": "3%", "right": "4%", "bottom": "12%", "containLabel": True},
+                            "xAxis": {
+                                "type": "category",
+                                "data": market_dates,
+                                "boundaryGap": False,
+                                "axisLine": {"lineStyle": {"color": "#666"}},
+                                "axisLabel": {"color": "#999", "fontSize": 10}
+                            },
+                            "yAxis": {
+                                "type": "value",
+                                "axisLine": {"lineStyle": {"color": "#666"}},
+                                "axisLabel": {"color": "#999"},
+                                "splitLine": {"lineStyle": {"color": "#333"}}
+                            },
+                            "dataZoom": [
+                                {"type": "inside", "start": 0, "end": 100},
+                                {"type": "slider", "start": 0, "end": 100, "bottom": "3%"}
+                            ],
+                            "series": [{
+                                "type": "line",
+                                "data": market_closes,
+                                "smooth": True,
+                                "showSymbol": False,
+                                "lineStyle": {"width": 2, "color": "#3b82f6"},
+                                "markArea": {
+                                    "silent": True,
+                                    "label": {
+                                        "show": True,
+                                        "position": "top",
+                                        "fontSize": 11,
+                                        "color": "#fff"
+                                    },
+                                    "data": market_mark_areas
+                                },
+                                "markPoint": {
+                                    "symbol": "circle",
+                                    "symbolSize": 8,
+                                    "label": {
+                                        "show": True,
+                                        "formatter": "{c}",
+                                        "fontSize": 9,
+                                        "color": "#fff",
+                                        "offset": [0, -10]
+                                    },
+                                    "data": market_turning_points_data
+                                }
+                            }]
+                        }
+                        
+                        # 图2：个股 + 择势背景 + 关键转折点
+                        stock_option = {
+                            "title": {
+                                "text": f"{self.selected_stock_name or self.selected_stock} 择势时间线",
+                                "left": "center",
+                                "textStyle": {"color": "#fff", "fontSize": 14}
+                            },
+                            "tooltip": {"trigger": "axis"},
+                            "grid": {"left": "3%", "right": "4%", "bottom": "12%", "containLabel": True},
+                            "xAxis": {
+                                "type": "category",
+                                "data": dates,
+                                "boundaryGap": False,
+                                "axisLine": {"lineStyle": {"color": "#666"}},
+                                "axisLabel": {"color": "#999", "fontSize": 10}
+                            },
+                            "yAxis": {
+                                "type": "value",
+                                "axisLine": {"lineStyle": {"color": "#666"}},
+                                "axisLabel": {"color": "#999"},
+                                "splitLine": {"lineStyle": {"color": "#333"}}
+                            },
+                            "dataZoom": [
+                                {"type": "inside", "start": 0, "end": 100},
+                                {"type": "slider", "start": 0, "end": 100, "bottom": "3%"}
+                            ],
+                            "series": [{
+                                "type": "line",
+                                "data": stock_closes,
+                                "smooth": True,
+                                "showSymbol": False,
+                                "lineStyle": {"width": 2, "color": "#3b82f6"},  # 蓝色线条
+                                "markArea": {
+                                    "silent": True,
+                                    "label": {
+                                        "show": True,
+                                        "position": "top",
+                                        "fontSize": 11,
+                                        "color": "#fff"
+                                    },
+                                    "data": stock_mark_areas
+                                },
+                                "markPoint": {
+                                    "symbol": "circle",
+                                    "symbolSize": 8,
+                                    "label": {
+                                        "show": True,
+                                        "formatter": "{c}",
+                                        "fontSize": 9,
+                                        "color": "#fff",
+                                        "offset": [0, -10]
+                                    },
+                                    "data": key_turning_points
+                                }
+                            }]
+                        }
+                        
+                        # 保存两个 option（用列表或字典）
+                        self.regime_chart_option = {
+                            "market": market_option,
+                            "stock": stock_option
+                        }
                     except Exception as e:
                         debug_log(f"[择势分析] 时间线分析失败: {e}")
                         self.regime_timeline = {}
+                        self.stock_ohlcv = []
+                        self.stock_timeline_segments = []
+                        self.stock_turning_points = []
+                        self.regime_chart_option = {}
                     finally:
                         self.timeline_loading = False
                     
-                    debug_log(f"[择势分析] 个股状态: {self.stock_regime}, ADX: {stock_analysis.get('adx'):.2f}")
+                    debug_log(f"[择势分析] 个股状态: {self.stock_regime}, ADX: {stock_analysis.get('adx', 0):.2f}")
                 else:
                     debug_log("[择势分析] 无数据，使用模拟数据")
                     df = data_service._generate_mock_history(self.selected_stock)
-                    stock_analysis = detector.get_analysis_detail(df)
+                    stock_analysis = stock_detector.get_analysis_detail(df)
                     self.stock_regime = stock_analysis["regime"]
                     self.regime_analysis = stock_analysis
                     self.regime_chart = generate_regime_chart(df, stock_analysis)
@@ -698,9 +1126,24 @@ CACHE_DIR=data/cache
                     
                     # 时间线择势分析 (模拟数据)
                     try:
-                        self.regime_timeline = timeline_analyzer.analyze_timeline(df)
+                        self.regime_timeline = stock_timeline_analyzer.analyze_timeline(df)
+                        self.stock_ohlcv = [
+                            {
+                                "date": str(row.get("trade_date", "")),
+                                "open": float(row.get("open", 0)),
+                                "high": float(row.get("high", 0)),
+                                "low": float(row.get("low", 0)),
+                                "close": float(row.get("close", 0)),
+                            }
+                            for _, row in df.iterrows()
+                        ]
+                        self.stock_timeline_segments = self.regime_timeline.get("segments", [])
+                        self.stock_turning_points = self.regime_timeline.get("turning_points", [])
                     except Exception:
                         self.regime_timeline = {}
+                        self.stock_ohlcv = []
+                        self.stock_timeline_segments = []
+                        self.stock_turning_points = []
                     
                     debug_log(f"[择势分析] 个股状态(模拟): {self.stock_regime}")
 
